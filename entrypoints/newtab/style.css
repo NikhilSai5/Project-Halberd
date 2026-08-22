@@ -1,0 +1,111 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    font-family: "Inter", sans-serif;
+  }
+
+  body {
+    background-color: #F7F7F5;
+  }
+}
+
+@layer components {
+  .glass-panel {
+    box-shadow: 0 10px 30px rgba(0,0,0,0.02);
+  }
+
+  .task-checkbox:checked + div {
+    text-decoration: line-through;
+    color: #A0A0A0;
+  }
+}
+
+@layer components {
+  .circular-chart {
+    display: block;
+    margin: 0 auto;
+    max-width: 80%;
+    max-height: 250px;
+  }
+
+  .circle-bg {
+    fill: none;
+    stroke: var(--tw-colors-surface-container-high);
+    stroke-width: 2.5;
+  }
+
+  .circle {
+    fill: none;
+    stroke-width: 2.5;
+    stroke-linecap: round;
+    transition: stroke-dasharray 0.3s ease;
+  }
+
+  .pet-float {
+    animation: float 3s ease-in-out infinite;
+  }
+}
+
+@keyframes float {
+  0% { transform: translateY(0px); }
+  50% { transform: translateY(-5px); }
+  100% { transform: translateY(0px); }
+}
+
+@layer utilities {
+  .font-body-main {
+    font-family: "Inter", sans-serif;
+    font-size: 14px;
+    line-height: 22px;
+    font-weight: 400;
+  }
+
+  .font-headline-page {
+    font-family: "Inter", sans-serif;
+    font-size: 24px;
+    line-height: 32px;
+    letter-spacing: -0.01em;
+    font-weight: 500;
+  }
+
+  .font-section-title {
+    font-family: "Inter", sans-serif;
+    font-size: 14px;
+    line-height: 20px;
+    letter-spacing: 0.02em;
+    font-weight: 600;
+  }
+
+  .font-headline-page-mobile {
+    font-family: "Inter", sans-serif;
+    font-size: 20px;
+    line-height: 28px;
+    font-weight: 500;
+  }
+
+  .font-display-timer {
+    font-family: "Inter", sans-serif;
+    font-size: 48px;
+    line-height: 1.1;
+    letter-spacing: -0.02em;
+    font-weight: 400;
+  }
+
+  .font-label-secondary {
+    font-family: "Inter", sans-serif;
+    font-size: 12px;
+    line-height: 16px;
+    font-weight: 400;
+  }
+
+  .font-caption-metadata {
+    font-family: "Inter", sans-serif;
+    font-size: 10px;
+    line-height: 14px;
+    letter-spacing: 0.03em;
+    font-weight: 500;
+  }
+}
