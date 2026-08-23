@@ -27,7 +27,7 @@ export default function Tools() {
             </button>
           </header>
           <div className="tools-body">
-            <section className="flex flex-col gap-4">
+            {/* <section className="flex flex-col gap-4">
               <div>
                 <h2 className="section-heading text-text-primary mb-1">Tab Organizer</h2>
                 <p className="font-body-main text-body-main text-text-secondary">Organize your tabs in one click</p>
@@ -43,8 +43,8 @@ export default function Tools() {
                 <span className="material-symbols-outlined icon-inline" aria-hidden="true">tab</span>
                 Organize Tabs
               </button>
-            </section>
-            <hr className="border-border-subtle" />
+            </section> */}
+            {/* <hr className="border-border-subtle" /> */}
             <section className="flex flex-col gap-4">
               <h2 className="section-heading text-text-primary mb-2">File Converters</h2>
               <div className="nested-surface flex flex-col overflow-hidden bg-surface-white">

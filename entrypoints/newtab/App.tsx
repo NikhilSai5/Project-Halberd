@@ -8,10 +8,11 @@ import FocusMode from './pages/FocusMode/FocusMode';
 import Tools from './pages/Tools/Tools';
 import Settings from './pages/Settings/Settings';
 import Calendar from './pages/Calendar/Calendar';
+import HabitTracker from './pages/HabitTracker/HabitTracker';
 import Navbar from '@/components/Navbar';
 import './style.css';
 
-type Page = "home" | "pomodoro" | "weekly-goal" | "focus" | "tools" | "settings" | "calendar";
+type Page = "home" | "pomodoro" | "weekly-goal" | "focus" | "tools" | "settings" | "calendar" | "habit-tracker";
 
 function App() {
   const [currentPage, setCurrentPage] = useState<Page>("home");
@@ -33,6 +34,8 @@ function App() {
       setCurrentPage("settings");
     } else if (icon === "calendar_today") {
       setCurrentPage("calendar");
+    } else if (icon === "checklist") {
+      setCurrentPage("habit-tracker");
     }
   };
 
@@ -43,6 +46,7 @@ function App() {
     if (currentPage === "tools") return "construction";
     if (currentPage === "settings") return "settings";
     if (currentPage === "calendar") return "calendar_today";
+    if (currentPage === "habit-tracker") return "checklist";
     return "center_focus_strong";
   };
 
@@ -56,6 +60,7 @@ function App() {
       {currentPage === "tools" && <Tools />}
       {currentPage === "settings" && <Settings />}
       {currentPage === "calendar" && <Calendar />}
+      {currentPage === "habit-tracker" && <HabitTracker />}
     </div>
   );
 }

@@ -754,9 +754,32 @@
     padding-block: 16px;
   }
 
+  .weekly-goal-panel {
+    height: 500px !important;
+    max-height: 500px !important;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .weekly-goal-header,
+  .weekly-goal-summary {
+    flex: 0 0 auto;
+  }
+
+  .weekly-session-list {
+    min-height: 0;
+    flex: 0 0 240px;
+    height: 240px;
+    max-height: 240px;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding-right: 4px;
+    scrollbar-gutter: stable;
+  }
+
   .weekly-session-row {
-    gap: 12px;
-    padding-block: 12px;
+    gap: 8px;
+    padding-block: 8px;
   }
 
   .weekly-session-content {
@@ -824,6 +847,10 @@
 
   .focus-card {
     min-width: 0;
+    height: min(560px, calc(100vh - 240px));
+    max-height: calc(100vh - 240px);
+    min-height: 0;
+    overflow: hidden;
   }
 
   .focus-content {
@@ -1010,6 +1037,16 @@
   .settings-panel {
     height: min(716px, calc(100vh - 220px));
     max-height: calc(100vh - 220px);
+  }
+
+  .focus-card {
+    height: min(560px, calc(100vh - 220px));
+    max-height: calc(100vh - 220px);
+  }
+
+  .weekly-goal-panel {
+    height: min(500px, calc(100vh - 120px)) !important;
+    max-height: min(500px, calc(100vh - 120px)) !important;
   }
 
   .settings-content {
