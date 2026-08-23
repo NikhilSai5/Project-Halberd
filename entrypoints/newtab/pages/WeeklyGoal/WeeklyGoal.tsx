@@ -14,40 +14,44 @@ const sessions: Session[] = [
 
 export default function WeeklyGoal() {
   return (
-    <div className="min-h-screen text-text-primary font-body-main flex flex-col relative overflow-x-hidden">
-      <main className="flex-grow flex items-center justify-center p-[20px] pt-32 pb-32">
-        <article className="glass-panel w-full max-w-md rounded-xl p-6 sm:p-8 relative flex flex-col gap-6">
-          <header className="flex justify-between items-start">
+    <div className="page-shell page-shell--centered text-text-primary font-body-main relative overflow-x-hidden">
+      <main className="page-main page-main--raised flex-grow flex items-center justify-center">
+        <article className="workspace-surface workspace-narrow w-full p-6 sm:p-8 relative flex flex-col gap-6">
+          <header className="page-header items-start">
             <div>
-              <h2 className="font-section-title text-section-title text-text-secondary uppercase tracking-wider mb-1">Weekly Goal</h2>
-              <h1 className="font-headline-page text-headline-page md:font-headline-page md:text-headline-page text-primary text-[28px]">Learn Distributed Systems</h1>
+              <h2 className="section-heading text-text-secondary uppercase tracking-wider mb-1">Weekly Goal</h2>
+              <h1 className="page-title text-primary text-[28px]">Learn Distributed Systems</h1>
             </div>
           </header>
           
           <section className="flex flex-col gap-3">
-            <div className="flex flex-col items-center justify-center gap-1 py-4">
+            <div className="weekly-duration">
               <span className="font-display-timer text-display-timer text-primary">14h 25m</span>
-              <span className="font-label-secondary text-label-secondary text-text-muted uppercase tracking-wider">total time spent</span>
+              <span className="label-copy text-text-muted uppercase tracking-wider">total time spent</span>
             </div>
           </section>
           
-          <section className="flex flex-col gap-[8px]">
+          <section className="flex flex-col gap-2">
             {sessions.map((session, index) => (
-              <div key={index} className="flex items-center justify-between py-3 border-b border-border-subtle group last:border-0">
-                <div className="flex items-center gap-3">
-                  <span className="font-label-secondary text-label-secondary text-primary">{session.timeRange}</span>
-                  <span className="font-body-main text-body-main text-text-primary">{session.description}</span>
+              <div key={index} className="list-row weekly-session-row border-b border-border-subtle group last:border-0">
+                <div className="weekly-session-content">
+                  <span className="weekly-session-time label-copy text-primary">{session.timeRange}</span>
+                  <span className="weekly-session-description body-copy text-text-primary">{session.description}</span>
                 </div>
-                <a className="text-text-muted hover:text-primary transition-colors" href="#">
-                  <span className="material-symbols-outlined text-[18px]">link</span>
+                <a
+                  aria-label={`Open session: ${session.description}`}
+                  className="weekly-session-link icon-button text-text-muted hover:text-primary transition-colors"
+                  href="#"
+                  onClick={(event) => event.preventDefault()}
+                  title="Session link unavailable"
+                >
+                  <span className="material-symbols-outlined icon-inline" aria-hidden="true">link</span>
                 </a>
               </div>
             ))}
           </section>
         </article>
       </main>
-      
-      <div className="fixed bottom-32 right-8 md:right-16 z-40 opacity-80 hover:opacity-100 transition-opacity" />
     </div>
   );
 }

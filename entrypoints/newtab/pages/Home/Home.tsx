@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 
 interface Task {
   id: number;
@@ -30,36 +30,37 @@ export default function Home() {
   };
 
   return (
-    <div className="min-h-screen text-text-primary font-body-main selection:bg-primary-container selection:text-on-primary-container relative pb-32">
+    <div className="page-shell page-shell--centered text-text-primary font-body-main selection:bg-primary-container selection:text-on-primary-container relative overflow-hidden">
       {/* Main Workspace */}
-      <main className="max-w-[720px] mx-auto px-4 md:px-0 mt-16 md:mt-24">
+      <main className="page-main page-main--narrow flex-1 flex flex-col justify-center">
         {/* Header */}
         <div className="mb-12 text-center">
-          <div className="font-caption-metadata text-caption-metadata text-text-muted uppercase tracking-widest mb-4">
+          <div className="caption-copy text-text-muted uppercase tracking-widest mb-4">
             {getDayName()}
           </div>
-          <h1 className="font-headline-page text-headline-page text-text-primary">
+          <h1 className="page-title text-text-primary">
             Good morning.
           </h1>
         </div>
 
         {/* Task List Card */}
-        <div className="bg-surface-white rounded-xl border border-border-subtle p-6 md:p-8 glass-panel">
+        <div className="surface-card p-6 md:p-8">
           <div className="space-y-0">
             {tasks.map((task) => (
               <label
                 key={task.id}
-                className="flex items-center gap-4 py-3 border-b border-border-subtle cursor-pointer group hover:bg-surface-secondary transition-colors -mx-6 px-6 md:-mx-8 md:px-8"
+                className="list-row task-row cursor-pointer group"
               >
                 <div className="relative flex items-center justify-center">
                   <input
                     type="checkbox"
-                    className="task-checkbox appearance-none w-5 h-5 border border-outline rounded-full checked:bg-primary checked:border-primary transition-colors cursor-pointer focus:ring-0 focus:ring-offset-0"
+                    className="task-checkbox"
+                    aria-label={task.text}
                     checked={taskStates[task.id] || false}
                     onChange={() => toggleTask(task.id)}
                   />
                   <span
-                    className={`material-symbols-outlined absolute text-[14px] text-surface-white pointer-events-none transition-opacity ${
+                    className={`task-checkmark material-symbols-outlined absolute text-surface-white pointer-events-none transition-opacity ${
                       taskStates[task.id] ? "opacity-100" : "opacity-0"
                     }`}
                     style={{ fontVariationSettings: "'FILL' 1" }}
@@ -68,7 +69,7 @@ export default function Home() {
                   </span>
                 </div>
                 <div
-                  className={`font-body-main text-body-main transition-colors ${
+                  className={`task-copy body-copy transition-colors ${
                     taskStates[task.id] ? "text-text-muted line-through" : "text-text-primary group-hover:text-primary"
                   }`}
                 >
@@ -80,7 +81,13 @@ export default function Home() {
 
           {/* Add Task Button */}
           <div className="pt-6">
-            <button className="flex items-center gap-2 text-primary font-section-title text-section-title hover:bg-primary-container/30 px-3 py-2 -ml-3 rounded-lg transition-colors group">
+            <button
+              type="button"
+              disabled
+              aria-label="Add task unavailable"
+              title="Adding tasks is not available yet"
+              className="button-regular add-task-button control-unavailable font-section-title text-section-title group"
+            >
               <span className="material-symbols-outlined text-[18px] group-hover:rotate-90 transition-transform duration-300" style={{ fontVariationSettings: "'FILL' 1" }}>
                 add
               </span>

@@ -31,7 +31,7 @@ export default function Settings() {
   const [selectedAccent, setSelectedAccent] = useState("#486551");
 
   return (
-    <div className="bg-background text-on-surface min-h-screen flex flex-col font-body-main antialiased selection:bg-secondary-container selection:text-on-secondary-container">
+    <div className="page-shell page-shell--centered bg-background text-on-surface flex flex-col font-body-main antialiased selection:bg-secondary-container selection:text-on-secondary-container">
       <header className="w-full top-0 px-[20px] pt-[20px]">
         {/* <div className="flex justify-between items-center max-w-[1440px] mx-auto w-full">
           <div className="font-headline-page text-headline-page font-medium text-on-surface flex items-center gap-2">
@@ -45,45 +45,55 @@ export default function Settings() {
           </div>
         </div> */}
       </header>
-      <main className="flex-grow flex items-center justify-center p-4 md:p-8 relative z-10 w-full max-w-[1440px] mx-auto">
-        <div className="glass-panel rounded-xl w-full max-w-4xl h-[716px] min-h-[500px] flex flex-col md:flex-row overflow-hidden relative">
-          <div className="md:hidden flex items-center justify-between p-4 border-b border-border-subtle">
-            <h1 className="font-section-title text-section-title text-on-surface">Settings</h1>
-            <button className="text-on-surface-variant hover:text-primary transition-colors">
-              <span className="material-symbols-outlined">close</span>
+      <main className="page-main flex-grow flex items-center justify-center relative z-10">
+        <div className="workspace-surface workspace-settings settings-panel w-full flex flex-col md:flex-row overflow-hidden relative">
+          <div className="settings-mobile-header md:hidden">
+            <h1 className="section-heading text-on-surface">Settings</h1>
+            <button
+              type="button"
+              aria-disabled="true"
+              aria-label="Close settings unavailable"
+              title="Closing settings is not available yet"
+              onClick={(event) => event.preventDefault()}
+              className="control-unavailable icon-button"
+            >
+              <span className="material-symbols-outlined icon-action" aria-hidden="true">close</span>
             </button>
           </div>
-          <aside className="hidden md:flex flex-col w-64 border-r border-border-subtle bg-surface-secondary flex-shrink-0">
-            <div className="p-6 h-full flex flex-col">
-              <h2 className="font-section-title text-section-title text-text-primary mb-6">Settings</h2>
-              <nav className="space-y-1 flex-1 overflow-y-auto">
+          <aside className="settings-sidebar hidden md:flex">
+            <div className="settings-sidebar-inner">
+              <h2 className="section-heading text-text-primary">Settings</h2>
+              <nav className="settings-nav" aria-label="Settings sections">
                 {navItems.map((item) => (
                   <button
                     key={item.id}
+                    type="button"
                     onClick={() => setActiveNav(item.id)}
-                    className={`flex items-center gap-3 px-3 py-2 rounded-lg text-body-main transition-colors w-full text-left ${
+                    aria-current={activeNav === item.id ? "page" : undefined}
+                    className={`settings-nav-item text-body-main ${
                       activeNav === item.id
-                        ? "bg-surface-container text-primary font-medium"
-                        : "text-text-secondary hover:bg-surface-container hover:text-on-surface"
+                        ? "settings-nav-item--active"
+                        : "settings-nav-item--inactive"
                     }`}
                   >
-                    <span className="material-symbols-outlined text-[18px]">{item.icon}</span>
+                    <span className="material-symbols-outlined settings-nav-icon" aria-hidden="true">{item.icon}</span>
                     {item.label}
                   </button>
                 ))}
               </nav>
             </div>
           </aside>
-          <section className="flex-grow p-6 md:p-10 overflow-y-auto">
-            <div className="max-w-xl">
+          <section className="settings-content">
+            <div className="settings-content-inner">
               {activeNav === "appearance" && (
                 <>
-                  <h3 className="font-headline-page text-headline-page text-on-surface mb-8 hidden md:block">Appearance</h3>
-                  <div className="space-y-[32px]">
-                    <div className="space-y-4">
-                      <h4 className="font-section-title text-section-title text-text-primary">Theme</h4>
-                      <div className="flex gap-4">
-                        <label className="flex-1 cursor-pointer group">
+                  <h3 className="page-title text-on-surface settings-page-heading hidden md:block">Appearance</h3>
+                  <div className="settings-sections">
+                    <div className="settings-section">
+                      <h4 className="section-heading text-text-primary">Theme</h4>
+                      <p className="label-copy settings-preview-note">Preview only. Theme switching is not enabled yet.</p>
+                      <div className="settings-theme-options">
+                        <label className="settings-theme-option group">
                           <input
                             type="radio"
                             name="theme"
@@ -92,15 +102,15 @@ export default function Settings() {
                             onChange={(e) => setTheme(e.target.value)}
                             className="peer sr-only"
                           />
-                          <div className="h-24 rounded-lg border-2 border-border-subtle bg-surface-white peer-checked:border-primary peer-checked:bg-surface transition-all flex items-center justify-center relative overflow-hidden group-hover:border-outline-variant">
+                          <div className="settings-theme-preview settings-theme-preview--light peer-checked:border-primary group-hover:border-outline-variant">
                             <div className="w-16 h-12 bg-surface-container-low rounded shadow-sm border border-border-subtle flex flex-col gap-2 p-2">
                               <div className="w-full h-2 bg-surface-container-highest rounded" />
                               <div className="w-2/3 h-2 bg-surface-container-highest rounded" />
                             </div>
                           </div>
-                          <span className="block mt-2 font-label-secondary text-label-secondary text-center text-text-secondary peer-checked:text-primary peer-checked:font-medium">Light</span>
+                          <span className="block mt-2 label-copy text-center text-text-secondary peer-checked:text-primary peer-checked:font-medium">Light preview</span>
                         </label>
-                        <label className="flex-1 cursor-pointer group">
+                        <label className="settings-theme-option group">
                           <input
                             type="radio"
                             name="theme"
@@ -109,69 +119,69 @@ export default function Settings() {
                             onChange={(e) => setTheme(e.target.value)}
                             className="peer sr-only"
                           />
-                          <div className="h-24 rounded-lg border-2 border-border-subtle bg-inverse-surface peer-checked:border-primary peer-checked:bg-inverse-surface transition-all flex items-center justify-center relative overflow-hidden group-hover:border-outline-variant">
+                          <div className="settings-theme-preview settings-theme-preview--dark peer-checked:border-primary group-hover:border-outline-variant">
                             <div className="w-16 h-12 bg-[#3f4140] rounded shadow-sm border border-[#4a4c4b] flex flex-col gap-2 p-2">
                               <div className="w-full h-2 bg-[#555756] rounded" />
                               <div className="w-2/3 h-2 bg-[#555756] rounded" />
                             </div>
                           </div>
-                          <span className="block mt-2 font-label-secondary text-label-secondary text-center text-text-secondary peer-checked:text-primary peer-checked:font-medium">Dark</span>
+                          <span className="block mt-2 label-copy text-center text-text-secondary peer-checked:text-primary peer-checked:font-medium">Dark preview</span>
                         </label>
                       </div>
                     </div>
-                    <div className="space-y-4">
-                      <h4 className="font-section-title text-section-title text-text-primary">Accent Color</h4>
-                      <div className="flex gap-3">
+                    <div className="settings-section">
+                      <h4 className="section-heading text-text-primary">Accent Color</h4>
+                      <div className="settings-accent-options">
                         {accentColors.map((accent, index) => (
                           <button
                             key={index}
+                            type="button"
+                            aria-label={`${accent.label} accent color`}
                             onClick={() => setSelectedAccent(accent.color)}
-                            className={`w-8 h-8 rounded-full transition-transform hover:scale-110 ${
-                              selectedAccent === accent.color ? "ring-2 ring-primary ring-offset-2 ring-offset-surface-white" : ""
-                            } ${accent.border ? "border border-border-subtle" : "border-2 border-transparent"}`}
+                            className={`settings-accent-swatch ${selectedAccent === accent.color ? "settings-accent-swatch--selected" : ""} ${accent.border ? "settings-accent-swatch--bordered" : ""}`}
                             style={{ backgroundColor: accent.color }}
                           />
                         ))}
                       </div>
                     </div>
-                    <div className="space-y-4">
-                      <h4 className="font-section-title text-section-title text-text-primary">Typography</h4>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div className="space-y-2">
+                    <div className="settings-section">
+                      <h4 className="section-heading text-text-primary">Typography</h4>
+                      <div className="settings-typography-grid">
+                        <div className="settings-field">
                           <label className="font-label-secondary text-label-secondary text-text-secondary">Font Family</label>
-                          <div className="relative">
+                          <div className="settings-select-wrap">
                             <select
                               value={fontFamily}
                               onChange={(e) => setFontFamily(e.target.value)}
-                              className="w-full bg-transparent border border-border-subtle rounded-lg px-3 py-2 font-body-main text-body-main text-on-surface appearance-none focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary"
+                              className="form-control settings-select bg-transparent font-body-main text-body-main text-on-surface appearance-none"
                             >
                               <option>Inter</option>
                               <option>SF Pro</option>
                               <option>Roboto</option>
                             </select>
-                            <span className="material-symbols-outlined absolute right-3 top-1/2 -translate-y-1/2 text-text-secondary pointer-events-none text-[20px]">expand_more</span>
+                            <span className="material-symbols-outlined icon-action absolute right-3 top-1/2 -translate-y-1/2 text-text-secondary pointer-events-none" aria-hidden="true">expand_more</span>
                           </div>
                         </div>
-                        <div className="space-y-2">
+                        <div className="settings-field">
                           <label className="font-label-secondary text-label-secondary text-text-secondary">Font Size</label>
-                          <div className="relative">
+                          <div className="settings-select-wrap">
                             <select
                               value={fontSize}
                               onChange={(e) => setFontSize(e.target.value)}
-                              className="w-full bg-transparent border border-border-subtle rounded-lg px-3 py-2 font-body-main text-body-main text-on-surface appearance-none focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary"
+                              className="form-control settings-select bg-transparent font-body-main text-body-main text-on-surface appearance-none"
                             >
                               <option>Small</option>
                               <option>Medium</option>
                               <option>Large</option>
                             </select>
-                            <span className="material-symbols-outlined absolute right-3 top-1/2 -translate-y-1/2 text-text-secondary pointer-events-none text-[20px]">expand_more</span>
+                            <span className="material-symbols-outlined icon-action absolute right-3 top-1/2 -translate-y-1/2 text-text-secondary pointer-events-none" aria-hidden="true">expand_more</span>
                           </div>
                         </div>
                       </div>
                     </div>
-                    <div className="space-y-6">
-                      <h4 className="font-section-title text-section-title text-text-primary">Interface Effects</h4>
-                      <div className="space-y-4">
+                    <div className="settings-section settings-effects-section">
+                      <h4 className="section-heading text-text-primary">Interface Effects</h4>
+                      <div className="settings-slider-group">
                         <div className="flex justify-between items-center">
                           <label className="font-body-main text-body-main text-on-surface">Background Blur</label>
                           <span className="font-label-secondary text-label-secondary text-text-secondary">{blur}px</span>
@@ -182,10 +192,10 @@ export default function Settings() {
                           max="32"
                           value={blur}
                           onChange={(e) => setBlur(Number(e.target.value))}
-                          className="w-full h-1 bg-surface-container-high rounded-full appearance-none cursor-pointer accent-primary"
+                          className="settings-slider w-full bg-surface-container-high rounded-full appearance-none cursor-pointer accent-primary"
                         />
                       </div>
-                      <div className="space-y-4">
+                      <div className="settings-slider-group">
                         <div className="flex justify-between items-center">
                           <label className="font-body-main text-body-main text-on-surface">Panel Transparency</label>
                           <span className="font-label-secondary text-label-secondary text-text-secondary">{transparency}%</span>
@@ -196,7 +206,7 @@ export default function Settings() {
                           max="100"
                           value={transparency}
                           onChange={(e) => setTransparency(Number(e.target.value))}
-                          className="w-full h-1 bg-surface-container-high rounded-full appearance-none cursor-pointer accent-primary"
+                          className="settings-slider w-full bg-surface-container-high rounded-full appearance-none cursor-pointer accent-primary"
                         />
                       </div>
                     </div>
@@ -204,22 +214,16 @@ export default function Settings() {
                 </>
               )}
               {activeNav !== "appearance" && (
-                <div className="text-center py-12 text-text-secondary">
-                  <span className="material-symbols-outlined text-[48px] mb-4 block">{navItems.find(n => n.id === activeNav)?.icon}</span>
-                  <h3 className="font-headline-page text-headline-page text-on-surface mb-2">{navItems.find(n => n.id === activeNav)?.label}</h3>
-                  <p className="font-body-main text-body-main">Settings for {navItems.find(n => n.id === activeNav)?.label.toLowerCase()} coming soon</p>
+                <div className="empty-state">
+                  <span className="material-symbols-outlined empty-state__icon" aria-hidden="true">{navItems.find(n => n.id === activeNav)?.icon}</span>
+                  <h3 className="empty-state__title page-title">{navItems.find(n => n.id === activeNav)?.label}</h3>
+                  <p className="body-copy">Settings for {navItems.find(n => n.id === activeNav)?.label.toLowerCase()} coming soon</p>
                 </div>
               )}
             </div>
           </section>
         </div>
       </main>
-      <div className="fixed bottom-32 right-12 z-0 hidden md:block opacity-60 hover:opacity-100 transition-opacity">
-        <svg className="pixel-pet w-8 h-8" fill="none" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg">
-          <path className="text-primary" d="M4 4h8v2h2v4h-2v2H4v-2H2V6h2V4z" fill="currentColor" />
-          <path d="M6 6h2v2H6V6zm4 0h2v2h-2V6z" fill="white" />
-        </svg>
-      </div>
     </div>
   );
 }

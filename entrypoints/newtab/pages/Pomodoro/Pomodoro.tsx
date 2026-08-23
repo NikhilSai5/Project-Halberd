@@ -63,21 +63,27 @@ export default function Pomodoro() {
   };
 
   return (
-    <div className="bg-background text-on-background min-h-screen font-body-main relative flex flex-col items-center justify-center pt-[20px] pb-32">
+    <div className="page-shell page-shell--centered bg-background text-on-background font-body-main relative items-center justify-center">
       {/* Main Workspace Container */}
-      <main className="w-full max-w-lg px-[20px] flex-1 flex flex-col justify-center items-center mt-12 md:mt-0 relative z-10">
+      <main className="page-main flex-1 flex flex-col justify-center items-center relative z-10">
         {/* Pomodoro Panel */}
-        <div className="w-full bg-surface-white rounded-2xl border border-border-subtle shadow-[0_4px_20px_rgba(0,0,0,0.05)] p-6 md:p-10 flex flex-col items-center">
+        <div className="workspace-surface workspace-narrow pomodoro-panel w-full p-6 md:p-10 flex flex-col items-center">
           {/* Header */}
-          <div className="w-full flex justify-between items-center mb-8">
-            <h1 className="font-headline-page text-headline-page md:text-headline-page text-text-primary">Pomodoro</h1>
-            <button className="font-label-secondary text-label-secondary text-text-muted hover:text-primary transition-colors flex items-center gap-1">
+          <div className="pomodoro-header w-full flex justify-between items-center mb-8">
+            <h1 className="page-title text-text-primary">Pomodoro</h1>
+            <button
+              type="button"
+              disabled
+              aria-label="History unavailable"
+              title="History is not available yet"
+              className="control-unavailable font-label-secondary text-label-secondary transition-colors flex items-center gap-1"
+            >
               History
-              <span className="material-symbols-outlined text-[14px]">history</span>
+              <span className="material-symbols-outlined icon-inline" aria-hidden="true">history</span>
             </button>
           </div>
           {/* Progress Ring & Timer */}
-          <div className="relative w-full max-w-[280px] aspect-square flex items-center justify-center mb-10">
+          <div className="pomodoro-ring relative aspect-square flex items-center justify-center">
             <svg className="circular-chart absolute inset-0 w-full h-full" viewBox="0 0 36 36">
               <path
                 className="circle-bg"
@@ -96,31 +102,37 @@ export default function Pomodoro() {
             </div>
           </div>
           {/* Controls */}
-          <div className="flex items-center gap-4 w-full justify-center">
+          <div className="pomodoro-controls">
             <button
+              type="button"
               onClick={handleStop}
-              className="w-12 h-12 rounded-full border border-border-subtle flex items-center justify-center text-text-secondary hover:bg-surface-container-low transition-colors active:scale-95"
+              aria-label="Stop timer"
+              className="icon-button border border-border-subtle text-text-secondary hover:bg-surface-container-low active:scale-95"
             >
-              <span className="material-symbols-outlined" style={{ fontVariationSettings: "'FILL' 1" }}>stop</span>
+              <span className="material-symbols-outlined icon-action" style={{ fontVariationSettings: "'FILL' 1" }}>stop</span>
             </button>
             <button
+              type="button"
               onClick={handleStartPause}
-              className="px-8 py-3 bg-secondary-container text-on-secondary-container rounded-full font-section-title text-section-title hover:bg-primary-fixed transition-colors active:scale-95 flex items-center gap-2 border border-secondary-fixed-dim"
+              aria-label={isRunning ? "Pause timer" : "Start timer"}
+              className="button-prominent bg-secondary-container text-on-secondary-container font-section-title text-section-title hover:bg-primary-fixed active:scale-95 border border-secondary-fixed-dim"
             >
-              <span className="material-symbols-outlined" style={{ fontVariationSettings: "'FILL' 1" }}>
+              <span className="material-symbols-outlined icon-action" aria-hidden="true" style={{ fontVariationSettings: "'FILL' 1" }}>
                 {isRunning ? "pause" : "play_arrow"}
               </span>
               {isRunning ? "Pause" : "Start"}
             </button>
             <button
+              type="button"
               onClick={handleReset}
-              className="w-12 h-12 rounded-full border border-border-subtle flex items-center justify-center text-text-secondary hover:bg-surface-container-low transition-colors active:scale-95"
+              aria-label="Reset timer"
+              className="icon-button border border-border-subtle text-text-secondary hover:bg-surface-container-low active:scale-95"
             >
-              <span className="material-symbols-outlined">restart_alt</span>
+              <span className="material-symbols-outlined icon-action">restart_alt</span>
             </button>
           </div>
           {/* Session Indicators */}
-          <div className="mt-8 flex gap-2">
+          <div className="pomodoro-sessions" role="group" aria-label="Pomodoro session progress">
             <div className="w-2 h-2 rounded-full bg-primary-container" />
             <div className="w-2 h-2 rounded-full bg-primary-container" />
             <div className="w-2 h-2 rounded-full bg-surface-container-high" />

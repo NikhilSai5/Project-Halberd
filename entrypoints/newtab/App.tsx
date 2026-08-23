@@ -47,7 +47,7 @@ function App() {
   };
 
   return (
-    <div className="min-h-screen">
+    <div className="app-shell">
       <Navbar activeItem={getActiveItem()} onNavClick={handleNavClick} />
       {currentPage === "home" && <Home />}
       {currentPage === "pomodoro" && <Pomodoro />}

@@ -70,6 +70,7 @@ export default {
         DEFAULT: "0.25rem",
         lg: "0.5rem",
         xl: "0.75rem",
+        "2xl": "1rem",
         full: "9999px",
       },
       spacing: {
@@ -79,6 +80,13 @@ export default {
         "section-gap": "32px",
         "item-gap": "8px",
         "outer-margin": "20px",
+        "page-gutter": "20px",
+        "page-top": "76px",
+        "page-bottom": "128px",
+      },
+      boxShadow: {
+        workspace: "0 10px 30px rgba(0, 0, 0, 0.02)",
+        nested: "0 4px 20px rgba(0, 0, 0, 0.05)",
       },
       fontFamily: {
         "body-main": ["Inter", "sans-serif"],
