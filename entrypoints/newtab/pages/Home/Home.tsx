@@ -15,7 +15,11 @@ const tasks: Task[] = [
   { id: 4, text: "Read documentation", completed: false },
 ];
 
-export default function Home() {
+interface HomeProps {
+  showTodoList?: boolean;
+}
+
+export default function Home({ showTodoList = true }: HomeProps) {
   const [taskStates, setTaskStates] = useState<Record<number, boolean>>({});
 
   const toggleTask = (id: number) => {
@@ -43,58 +47,62 @@ export default function Home() {
           </h1>
         </div>
 
-        {/* Task List Card */}
-        <div className="surface-card p-6 md:p-8">
-          <div className="space-y-0">
-            {tasks.map((task) => (
-              <label
-                key={task.id}
-                className="list-row task-row cursor-pointer group"
-              >
-                <div className="relative flex items-center justify-center">
-                  <input
-                    type="checkbox"
-                    className="task-checkbox"
-                    aria-label={task.text}
-                    checked={taskStates[task.id] || false}
-                    onChange={() => toggleTask(task.id)}
-                  />
-                  <span
-                    className={`task-checkmark material-symbols-outlined absolute text-surface-white pointer-events-none transition-opacity ${
-                      taskStates[task.id] ? "opacity-100" : "opacity-0"
-                    }`}
-                    style={{ fontVariationSettings: "'FILL' 1" }}
+        {showTodoList ? (
+          <>
+            {/* Task List Card */}
+            <div className="surface-card p-6 md:p-8">
+              <div className="space-y-0">
+                {tasks.map((task) => (
+                  <label
+                    key={task.id}
+                    className="list-row task-row cursor-pointer group"
                   >
-                    check
-                  </span>
-                </div>
-                <div
-                  className={`task-copy body-copy transition-colors ${
-                    taskStates[task.id] ? "text-text-muted line-through" : "text-text-primary group-hover:text-primary"
-                  }`}
-                >
-                  {task.text}
-                </div>
-              </label>
-            ))}
-          </div>
+                    <div className="relative flex items-center justify-center">
+                      <input
+                        type="checkbox"
+                        className="task-checkbox"
+                        aria-label={task.text}
+                        checked={taskStates[task.id] || false}
+                        onChange={() => toggleTask(task.id)}
+                      />
+                      <span
+                        className={`task-checkmark material-symbols-outlined absolute text-surface-white pointer-events-none transition-opacity ${
+                          taskStates[task.id] ? "opacity-100" : "opacity-0"
+                        }`}
+                        style={{ fontVariationSettings: "'FILL' 1" }}
+                      >
+                        check
+                      </span>
+                    </div>
+                    <div
+                      className={`task-copy body-copy transition-colors ${
+                        taskStates[task.id] ? "text-text-muted line-through" : "text-text-primary group-hover:text-primary"
+                      }`}
+                    >
+                      {task.text}
+                    </div>
+                  </label>
+                ))}
+              </div>
 
-          {/* Add Task Button */}
-          <div className="pt-6">
-            <button
-              type="button"
-              disabled
-              aria-label="Add task unavailable"
-              title="Adding tasks is not available yet"
-              className="button-regular add-task-button control-unavailable font-section-title text-section-title group"
-            >
-              <span className="material-symbols-outlined text-[18px] group-hover:rotate-90 transition-transform duration-300" style={{ fontVariationSettings: "'FILL' 1" }}>
-                add
-              </span>
-              Add task
-            </button>
-          </div>
-        </div>
+              {/* Add Task Button */}
+              <div className="pt-6">
+                <button
+                  type="button"
+                  disabled
+                  aria-label="Add task unavailable"
+                  title="Adding tasks is not available yet"
+                  className="button-regular add-task-button control-unavailable font-section-title text-section-title group"
+                >
+                  <span className="material-symbols-outlined text-[18px] group-hover:rotate-90 transition-transform duration-300" style={{ fontVariationSettings: "'FILL' 1" }}>
+                    add
+                  </span>
+                  Add task
+                </button>
+              </div>
+            </div>
+          </>
+        ) : null}
       </main>
     </div>
   );

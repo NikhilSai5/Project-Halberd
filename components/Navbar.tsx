@@ -11,6 +11,7 @@ interface NavbarProps {
   activeItem?: string;
   navItems?: NavItem[];
   onNavClick?: (icon: string) => void;
+  position?: "bottom-center" | "left" | "right";
 }
 
 const defaultNavItems: NavItem[] = [
@@ -24,7 +25,7 @@ const defaultNavItems: NavItem[] = [
   { icon: "settings", label: "Settings" },
 ];
 
-export default function Navbar({ activeItem, navItems = defaultNavItems, onNavClick }: NavbarProps) {
+export default function Navbar({ activeItem, navItems = defaultNavItems, onNavClick, position = "bottom-center" }: NavbarProps) {
   const [currentTime, setCurrentTime] = useState("");
 
   useEffect(() => {
@@ -47,6 +48,10 @@ export default function Navbar({ activeItem, navItems = defaultNavItems, onNavCl
     }
   };
 
+  const isBottomCenter = position === "bottom-center";
+  const isLeft = position === "left";
+  const isRight = position === "right";
+
   return (
     <>
       {/* Top Navigation (Desktop) */}
@@ -60,44 +65,123 @@ export default function Navbar({ activeItem, navItems = defaultNavItems, onNavCl
       <nav className="top-navigation md:hidden flex" aria-label="Mobile header">
         <div className="brand-mobile font-headline-page-mobile text-headline-page-mobile font-medium text-text-primary">Halberd</div>
       </nav>
-      {/* Bottom Navigation Dock */}
-      <div className="dock-shell fixed left-1/2 -translate-x-1/2 z-50">
-        <div className="dock-meta dock-meta--left hidden sm:flex font-caption-metadata text-caption-metadata text-text-muted uppercase tracking-widest">
-          {currentTime}
-        </div>
-        <nav className="dock-nav flex flex-row items-center justify-center" aria-label="Primary navigation">
-          {navItems.map((item) => (
-            <button
-              key={item.icon}
-              onClick={() => handleClick(item.icon)}
-              aria-label={item.label}
-              aria-current={item.icon === activeItem ? "page" : undefined}
-              title={item.label}
-              className={`icon-button dock-button transition-all ${
-                item.icon === activeItem
-                  ? "bg-primary-container/30 text-primary"
-                  : "text-text-secondary hover:text-primary transition-colors"
-              }`}
-            >
-              <span
-                className="material-symbols-outlined text-[20px]"
-                style={{
-                  fontVariationSettings: item.icon === activeItem ? "'FILL' 1, 'wght' 300" : "'FILL' 0, 'wght' 300",
-                }}
-              >
-                {item.icon}
-              </span>
-            </button>
-          ))}
-        </nav>
-        <div className="dock-meta dock-meta--right hidden sm:flex text-text-muted">
-          <div className="flex items-center gap-1 mr-4">
-            <span className="material-symbols-outlined text-[18px] text-text-secondary" aria-hidden="true">light_mode</span>
-            <span className="font-label-secondary text-label-secondary text-text-secondary">24°</span>
+
+      {/* Bottom Navigation Dock - Bottom Center (Default) */}
+      {isBottomCenter && (
+        <div className="dock-shell fixed left-1/2 -translate-x-1/2 bottom-dock-inset z-50">
+          <div className="dock-meta dock-meta--left hidden sm:flex font-caption-metadata text-caption-metadata text-text-muted uppercase tracking-widest">
+            {currentTime}
           </div>
-          <span className="material-symbols-outlined text-[20px] opacity-50" aria-hidden="true">pets</span>
+          <nav className="dock-nav flex flex-row items-center justify-center" aria-label="Primary navigation">
+            {navItems.map((item) => (
+              <button
+                key={item.icon}
+                onClick={() => handleClick(item.icon)}
+                aria-label={item.label}
+                aria-current={item.icon === activeItem ? "page" : undefined}
+                title={item.label}
+                className={`icon-button dock-button transition-all ${
+                  item.icon === activeItem
+                    ? "bg-primary-container/30 text-primary"
+                    : "text-text-secondary hover:text-primary transition-colors"
+                }`}
+              >
+                <span
+                  className="material-symbols-outlined text-[20px]"
+                  style={{
+                    fontVariationSettings: item.icon === activeItem ? "'FILL' 1, 'wght' 300" : "'FILL' 0, 'wght' 300",
+                  }}
+                >
+                  {item.icon}
+                </span>
+              </button>
+            ))}
+          </nav>
+          <div className="dock-meta dock-meta--right hidden sm:flex text-text-muted">
+            <div className="flex items-center gap-1 mr-4">
+              <span className="material-symbols-outlined text-[18px] text-text-secondary" aria-hidden="true">light_mode</span>
+              <span className="font-label-secondary text-label-secondary text-text-secondary">24°</span>
+            </div>
+            <span className="material-symbols-outlined text-[20px] opacity-50" aria-hidden="true">pets</span>
+          </div>
         </div>
-      </div>
+      )}
+
+      {/* Left Sidebar Navigation */}
+      {isLeft && (
+        <nav className="fixed left-0 top-0 bottom-0 z-50 w-20 md:w-24 bg-surface-white/80 dark:bg-surface-white/80 backdrop-blur-md border-r border-border-subtle flex flex-col items-center justify-start pt-20 pb-dock-inset px-2 md:px-3" aria-label="Primary navigation">
+          <div className="flex flex-col items-center gap-2 flex-1 overflow-y-auto">
+            {navItems.map((item) => (
+              <button
+                key={item.icon}
+                onClick={() => handleClick(item.icon)}
+                aria-label={item.label}
+                aria-current={item.icon === activeItem ? "page" : undefined}
+                title={item.label}
+                className={`icon-button transition-all w-10 h-10 md:w-12 md:h-12 flex items-center justify-center rounded-xl ${
+                  item.icon === activeItem
+                    ? "bg-primary-container/30 text-primary"
+                    : "text-text-secondary hover:text-primary hover:bg-surface-container transition-colors"
+                }`}
+              >
+                <span
+                  className="material-symbols-outlined text-[22px] md:text-[24px]"
+                  style={{
+                    fontVariationSettings: item.icon === activeItem ? "'FILL' 1, 'wght' 300" : "'FILL' 0, 'wght' 300",
+                  }}
+                >
+                  {item.icon}
+                </span>
+              </button>
+            ))}
+          </div>
+          <div className="dock-meta dock-meta--right mb-4 text-center px-2">
+            <div className="flex items-center justify-center gap-1 mb-2">
+              <span className="material-symbols-outlined text-[18px] text-text-secondary" aria-hidden="true">light_mode</span>
+              <span className="font-label-secondary text-label-secondary text-text-secondary">24°</span>
+            </div>
+            <span className="material-symbols-outlined text-[20px] opacity-50">pets</span>
+          </div>
+        </nav>
+      )}
+
+      {/* Right Sidebar Navigation */}
+      {isRight && (
+        <nav className="fixed right-0 top-0 bottom-0 z-50 w-20 md:w-24 bg-surface-white/80 dark:bg-surface-white/80 backdrop-blur-md border-l border-border-subtle flex flex-col items-center justify-start pt-20 pb-dock-inset px-2 md:px-3" aria-label="Primary navigation">
+          <div className="flex flex-col items-center gap-2 flex-1 overflow-y-auto">
+            {navItems.map((item) => (
+              <button
+                key={item.icon}
+                onClick={() => handleClick(item.icon)}
+                aria-label={item.label}
+                aria-current={item.icon === activeItem ? "page" : undefined}
+                title={item.label}
+                className={`icon-button transition-all w-10 h-10 md:w-12 md:h-12 flex items-center justify-center rounded-xl ${
+                  item.icon === activeItem
+                    ? "bg-primary-container/30 text-primary"
+                    : "text-text-secondary hover:text-primary hover:bg-surface-container transition-colors"
+                }`}
+              >
+                <span
+                  className="material-symbols-outlined text-[22px] md:text-[24px]"
+                  style={{
+                    fontVariationSettings: item.icon === activeItem ? "'FILL' 1, 'wght' 300" : "'FILL' 0, 'wght' 300",
+                  }}
+                >
+                  {item.icon}
+                </span>
+              </button>
+            ))}
+          </div>
+          <div className="dock-meta dock-meta--right mb-4 text-center px-2">
+            <div className="flex items-center justify-center gap-1 mb-2">
+              <span className="material-symbols-outlined text-[18px] text-text-secondary" aria-hidden="true">light_mode</span>
+              <span className="font-label-secondary text-label-secondary text-text-secondary">24°</span>
+            </div>
+            <span className="material-symbols-outlined text-[20px] opacity-50">pets</span>
+          </div>
+        </nav>
+      )}
     </>
   );
 }

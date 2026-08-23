@@ -13,10 +13,13 @@ import Navbar from '@/components/Navbar';
 import './style.css';
 
 type Page = "home" | "pomodoro" | "weekly-goal" | "focus" | "tools" | "settings" | "calendar" | "habit-tracker";
+type NavbarPosition = "bottom-center" | "left" | "right";
 
 function App() {
   const [currentPage, setCurrentPage] = useState<Page>("home");
   const [focusTrigger, setFocusTrigger] = useState<"center_focus_strong" | "analytics">("analytics");
+  const [showTodoListInHome, setShowTodoListInHome] = useState(true);
+  const [navbarPosition, setNavbarPosition] = useState<NavbarPosition>("bottom-center");
 
   const handleNavClick = (icon: string) => {
     if (icon === "timer") {
@@ -52,8 +55,8 @@ function App() {
 
   return (
     <div className="app-shell">
-      <Navbar activeItem={getActiveItem()} onNavClick={handleNavClick} />
-      {currentPage === "home" && <Home />}
+      <Navbar activeItem={getActiveItem()} onNavClick={handleNavClick} position={navbarPosition} />
+      {currentPage === "home" && <Home showTodoList={showTodoListInHome} />}
       {currentPage === "pomodoro" && <Pomodoro />}
       {currentPage === "weekly-goal" && <WeeklyGoal />}
       {currentPage === "focus" && <FocusMode />}

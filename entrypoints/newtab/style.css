@@ -694,9 +694,105 @@
     box-shadow: 0 0 0 1px #486551;
   }
 
-  .settings-preview-note {
-    margin-top: -8px;
-    color: #a0a0a0;
+  .settings-file-dropzone {
+    @apply transition-all duration-200;
+  }
+  
+  .settings-file-dropzone:focus-within {
+    @apply outline-none ring-2 ring-primary ring-offset-2 ring-offset-surface-white;
+  }
+  
+  .settings-file-dropzone:hover {
+    @apply border-primary bg-surface-container;
+  }
+  
+  .wallpaper-preview-grid {
+    @apply grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3;
+  }
+  
+  .wallpaper-preview-grid > div {
+    @apply relative aspect-square rounded-lg overflow-hidden border border-border-subtle bg-surface-container-low;
+  }
+  
+  .wallpaper-preview-grid > div:hover .wallpaper-remove-btn,
+  .wallpaper-preview-grid > div:focus-within .wallpaper-remove-btn {
+    @apply opacity-100;
+  }
+  
+  .wallpaper-preview-grid img {
+    @apply w-full h-full object-cover;
+  }
+  
+  .wallpaper-remove-btn {
+    @apply absolute top-2 right-2 opacity-0 transition-opacity p-1 rounded-full bg-surface-white/80 hover:bg-surface-white text-text-secondary hover:text-error;
+  }
+  
+  .wallpaper-remove-btn .material-symbols-outlined {
+    @apply text-[18px];
+  }
+  
+  .wallpaper-name-overlay {
+    @apply absolute bottom-0 left-0 right-0 p-2 bg-gradient-to-t from-black/60 to-transparent text-surface-white text-xs truncate;
+  }
+
+  /* Toggle switch */
+  .settings-toggle {
+    @apply relative w-11 h-6 rounded-full transition-colors cursor-pointer;
+  }
+  
+  .settings-toggle:focus-visible {
+    @apply outline-none ring-2 ring-primary ring-offset-2 ring-offset-surface-white;
+  }
+  
+  .settings-toggle span {
+    @apply absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-surface-white shadow-md transition-transform;
+  }
+  
+  .settings-toggle[aria-checked="true"] span {
+    @apply translate-x-full;
+  }
+  
+  .settings-toggle[aria-checked="true"] {
+    @apply bg-primary;
+  }
+  
+  .settings-toggle[aria-checked="false"] {
+    @apply bg-surface-container-high;
+  }
+  
+  .settings-toggle[aria-checked="false"] span {
+    @apply translate-x-0;
+  }
+
+  /* Info banner */
+  .settings-info-banner {
+    @apply bg-tertiary-container/20 border border-tertiary-container/30 rounded-lg p-4;
+  }
+  
+  .settings-info-banner .material-symbols-outlined {
+    @apply text-tertiary text-[20px] mt-0.5 flex-shrink-0;
+  }
+
+  /* Settings select wrap for wallpaper tab */
+  .settings-select-wrap {
+    @apply relative;
+  }
+  
+  .settings-select-wrap .material-symbols-outlined {
+    @apply absolute right-3 top-1/2 -translate-y-1/2 text-text-secondary pointer-events-none text-[20px];
+  }
+  
+  .settings-select-wrap select {
+    @apply w-full min-h-[40px] pr-10 bg-transparent border border-border-subtle rounded-lg px-3 py-2 font-body-main text-body-main text-on-surface appearance-none focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary;
+  }
+
+  /* Empty state for wallpaper */
+  .settings-file-dropzone .material-symbols-outlined {
+    @apply text-4xl text-text-muted transition-colors;
+  }
+  
+  .settings-file-dropzone:hover .material-symbols-outlined {
+    @apply text-primary;
   }
 
   .empty-state {
