@@ -65,6 +65,10 @@ export default {
         "on-primary": "#ffffff",
         "on-surface": "#1a1c1b",
         "surface-variant": "#e2e3e1",
+        "warning": "#e8a65d",
+        "warning-container": "#ffe8cc",
+        "on-warning-container": "#7a4a00",
+        "on-warning": "#ffffff",
       },
       borderRadius: {
         DEFAULT: "0.25rem",

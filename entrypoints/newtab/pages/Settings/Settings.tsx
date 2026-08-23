@@ -63,6 +63,7 @@ export default function Settings() {
   const [slideshowInterval, setSlideshowInterval] = useState("30min");
   const [liveWallpaperEnabled, setLiveWallpaperEnabled] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const folderInputRef = useRef<HTMLInputElement>(null);
 
   // Layout state
   const [navbarLocation, setNavbarLocation] = useState<"bottom-center" | "left" | "right">("bottom-center");
@@ -132,8 +133,37 @@ export default function Settings() {
     if (e.target) e.target.value = "";
   };
 
+  // Handle folder selection for slideshow
+  const handleFolderSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files) return;
+
+    Array.from(files).forEach((file) => {
+      if (!file.type.startsWith("image/")) return;
+
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const newWallpaper: WallpaperFile = {
+          id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+          name: file.name,
+          preview: event.target?.result as string,
+          file,
+        };
+        setWallpapers((prev) => [...prev, newWallpaper]);
+      };
+      reader.readAsDataURL(file);
+    });
+
+    // Reset input value
+    if (e.target) e.target.value = "";
+  };
+
   const removeWallpaper = (id: string) => {
     setWallpapers((prev) => prev.filter((w) => w.id !== id));
+  };
+
+  const clearAllWallpapers = () => {
+    setWallpapers([]);
   };
 
   // Todo group functions
@@ -430,9 +460,19 @@ export default function Settings() {
                   <div className="settings-sections space-y-section-gap">
                     {/* Upload Your Own Wallpapers */}
                     <div className="settings-section">
-                      <h4 className="section-heading text-text-primary">Upload Your Own</h4>
+                      <div className="flex items-center justify-between mb-4">
+                        <h4 className="section-heading text-text-primary">Upload Your Own</h4>
+                        {wallpapers.length > 0 && (
+                          <button
+                            onClick={clearAllWallpapers}
+                            className="button-regular button-regular--outlined font-section-title text-section-title text-error border-error text-sm px-3 py-1.5 hover:bg-error/10"
+                          >
+                            Clear All
+                          </button>
+                        )}
+                      </div>
                       <div className="space-y-4">
-                        <label className="settings-file-dropzone relative cursor-pointer rounded-xl border-2 border-border-subtle bg-surface-container-low p-8 transition-all hover:border-primary hover:bg-surface-container focus-within:border-primary focus-within:bg-surface-container">
+                        <label className="settings-file-dropzone relative cursor-pointer rounded-xl  border-border-subtle bg-surface-container-low transition-all hover:border-primary hover:bg-surface-container focus-within:border-primary focus-within:bg-surface-container">
                           <input
                             ref={fileInputRef}
                             type="file"
@@ -450,23 +490,28 @@ export default function Settings() {
                           </div>
                         </label>
                         {wallpapers.length > 0 && (
-                          <div className="wallpaper-preview-grid">
-                            {wallpapers.map((wp) => (
-                              <div key={wp.id} className="relative aspect-square rounded-lg overflow-hidden border border-border-subtle bg-surface-container-low">
-                                <img src={wp.preview} alt={wp.name} className="w-full h-full object-cover" />
-                                <button
-                                  onClick={() => removeWallpaper(wp.id)}
-                                  className="wallpaper-remove-btn"
-                                  aria-label={`Remove ${wp.name}`}
-                                >
-                                  <span className="material-symbols-outlined text-[18px]">close</span>
-                                </button>
-                                <div className="wallpaper-name-overlay">
-                                  {wp.name}
+                          <>
+                            <div className="flex items-center justify-between text-sm text-text-secondary">
+                              <span>{wallpapers.length} image{wallpapers.length !== 1 ? "s" : ""} selected</span>
+                            </div>
+                            <div className="wallpaper-preview-grid">
+                              {wallpapers.map((wp) => (
+                                <div key={wp.id} className="relative aspect-square rounded-lg overflow-hidden border border-border-subtle bg-surface-container-low">
+                                  <img src={wp.preview} alt={wp.name} className="w-full h-full object-cover" />
+                                  <button
+                                    onClick={() => removeWallpaper(wp.id)}
+                                    className="wallpaper-remove-btn"
+                                    aria-label={`Remove ${wp.name}`}
+                                  >
+                                    <span className="material-symbols-outlined text-[18px]">close</span>
+                                  </button>
+                                  <div className="wallpaper-name-overlay">
+                                    {wp.name}
+                                  </div>
                                 </div>
-                              </div>
-                            ))}
-                          </div>
+                              ))}
+                            </div>
+                          </>
                         )}
                       </div>
                     </div>
@@ -497,24 +542,64 @@ export default function Settings() {
                           </button>
                         </div>
                         {slideshowEnabled && (
-                          <div className="settings-field ml-14">
-                            <label className="font-label-secondary text-label-secondary text-text-secondary">Interval</label>
-                            <div className="settings-select-wrap">
-                              <select
-                                value={slideshowInterval}
-                                onChange={(e) => setSlideshowInterval(e.target.value)}
-                                className="form-control settings-select bg-transparent font-body-main text-body-main text-on-surface appearance-none"
-                                disabled={!slideshowEnabled}
-                              >
-                                <option value="15min">Every 15 minutes</option>
-                                <option value="30min">Every 30 minutes</option>
-                                <option value="1hr">Every hour</option>
-                                <option value="6hr">Every 6 hours</option>
-                                <option value="12hr">Every 12 hours</option>
-                                <option value="24hr">Every 24 hours</option>
-                              </select>
-                              <span className="material-symbols-outlined icon-action absolute right-3 top-1/2 -translate-y-1/2 text-text-secondary pointer-events-none" aria-hidden="true">expand_more</span>
+                          <div className="space-y-4 ml-14 border-l-2 border-border-subtle pl-4">
+                            <div className="settings-field">
+                              <label className="font-label-secondary text-label-secondary text-text-secondary">Interval</label>
+                              <div className="settings-select-wrap">
+                                <select
+                                  value={slideshowInterval}
+                                  onChange={(e) => setSlideshowInterval(e.target.value)}
+                                  className="form-control settings-select bg-transparent font-body-main text-body-main text-on-surface appearance-none"
+                                  disabled={!slideshowEnabled}
+                                >
+                                  <option value="15min">Every 15 minutes</option>
+                                  <option value="30min">Every 30 minutes</option>
+                                  <option value="1hr">Every hour</option>
+                                  <option value="6hr">Every 6 hours</option>
+                                  <option value="12hr">Every 12 hours</option>
+                                  <option value="24hr">Every 24 hours</option>
+                                </select>
+                                <span className="material-symbols-outlined icon-action absolute right-3 top-1/2 -translate-y-1/2 text-text-secondary pointer-events-none" aria-hidden="true">expand_more</span>
+                              </div>
                             </div>
+                            
+                            {/* Folder Selection for Slideshow */}
+                            <div className="settings-field">
+                              <label className="font-label-secondary text-label-secondary text-text-secondary">Slideshow Folder</label>
+                              <div className="space-y-2">
+                                <input
+                                  ref={folderInputRef}
+                                  type="file"
+                                  accept="image/*"
+                                  {...{ webkitdirectory: true, directory: true }}
+                                  multiple
+                                  onChange={handleFolderSelect}
+                                  className="sr-only"
+                                  aria-label="Select folder for slideshow"
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => folderInputRef.current?.click()}
+                                  className="button-regular button-regular--outlined font-section-title text-section-title group w-full justify-start"
+                                >
+                                  <span className="material-symbols-outlined text-[18px]">folder_open</span>
+                                  Select Folder for Slideshow
+                                </button>
+                                <div className="label-copy text-text-muted">Select a folder containing images for the slideshow</div>
+                              </div>
+                            </div>
+
+                            {wallpapers.length === 0 && (
+                              <div className="settings-info-banner bg-warning-container/20 border border-warning-container/30 rounded-lg p-4">
+                                <div className="flex items-start gap-3">
+                                  <span className="material-symbols-outlined text-warning text-[20px] mt-0.5" aria-hidden="true">warning</span>
+                                  <div className="flex-1">
+                                    <div className="font-body-main text-body-main text-on-surface">No Images for Slideshow</div>
+                                    <div className="label-copy text-text-secondary mt-1">Add images above or select a folder to use the slideshow feature.</div>
+                                  </div>
+                                </div>
+                              </div>
+                            )}
                           </div>
                         )}
                       </div>
