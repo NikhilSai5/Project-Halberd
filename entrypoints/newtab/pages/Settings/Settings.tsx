@@ -70,6 +70,19 @@ export default function Settings() {
     setShowTodoListInHome 
   } = useSettings();
   const [showCompletedTasks, setShowCompletedTasks] = useState(true);
+  const [expandedGroupIds, setExpandedGroupIds] = useState<Set<string>>(new Set());
+
+  const toggleGroupExpand = (groupId: string) => {
+    setExpandedGroupIds(prev => {
+      const next = new Set(prev);
+      if (next.has(groupId)) {
+        next.delete(groupId);
+      } else {
+        next.add(groupId);
+      }
+      return next;
+    });
+  };
 
   // Goals state
   const [weeklyGoals, setWeeklyGoals] = useState<WeeklyGoal[]>([
@@ -639,61 +652,73 @@ export default function Settings() {
                         </button>
                       </div>
                       <div className="space-y-4">
-                        {todoGroups.map((group, groupIndex) => (
-                          <div key={group.id} className="todo-group bg-surface-container-low rounded-xl border border-border-subtle p-4">
-                            <div className="flex items-center gap-3 mb-3">
-                              <input
-                                type="text"
-                                value={group.name}
-                                onChange={(e) => updateTodoGroupName(group.id, e.target.value)}
-                                className="flex-1 bg-transparent border-none focus:outline-none font-body-main text-body-main text-on-surface placeholder:text-text-muted"
-                                placeholder="Group name"
-                              />
-                              {todoGroups.length > 1 && (
+                        {todoGroups.map((group, groupIndex) => {
+                          const isExpanded = expandedGroupIds.has(group.id);
+                          return (
+                            <div key={group.id} className="todo-group bg-surface-container-low rounded-xl border border-border-subtle px-4 py-1">
+                              <div className="flex items-center gap-3">
+                                <input
+                                  type="text"
+                                  value={group.name}
+                                  onChange={(e) => updateTodoGroupName(group.id, e.target.value)}
+                                  className="flex-1 bg-transparent border-none focus:outline-none font-body-main text-body-main text-on-surface placeholder:text-text-muted"
+                                  placeholder="Group name"
+                                />
                                 <button
-                                  onClick={() => deleteTodoGroup(group.id)}
-                                  className="icon-button text-text-muted hover:text-error transition-colors p-1 rounded-full hover:bg-surface-container"
-                                  aria-label={`Delete ${group.name}`}
+                                  onClick={() => toggleGroupExpand(group.id)}
+                                  className="icon-button text-text-secondary hover:text-primary transition-colors p-1 rounded-full hover:bg-surface-container"
+                                  aria-label={isExpanded ? `Collapse ${group.name}` : `Expand ${group.name}`}
                                 >
-                                  <span className="material-symbols-outlined text-[20px]" aria-hidden="true">delete</span>
+                                  <span className={`material-symbols-outlined text-[16px] transition-transform duration-200 ${isExpanded ? "rotate-180" : ""}`} aria-hidden="true">expand_more</span>
                                 </button>
-                              )}
-                            </div>
-                            <div className="space-y-2">
-                              {group.todos.map((todo) => (
-                                <div key={todo.id} className="flex items-center gap-2">
-                                  <input
-                                    type="checkbox"
-                                    checked={todo.completed}
-                                    onChange={(e) => updateTodo(group.id, todo.id, { completed: e.target.checked })}
-                                    className="w-4 h-4 accent-primary"
-                                  />
-                                  <input
-                                    type="text"
-                                    value={todo.text}
-                                    onChange={(e) => updateTodo(group.id, todo.id, { text: e.target.value })}
-                                    className="flex-1 bg-transparent border-none focus:outline-none font-body-main text-body-main text-on-surface placeholder:text-text-muted"
-                                    placeholder="Add a task..."
-                                  />
+                                {todoGroups.length > 1 && (
                                   <button
-                                    onClick={() => deleteTodo(group.id, todo.id)}
-                                    className="icon-button text-text-muted hover:text-error transition-colors p-1 rounded-full hover:bg-surface-container opacity-0 group-hover:opacity-100"
-                                    aria-label="Delete task"
+                                    onClick={() => deleteTodoGroup(group.id)}
+                                    className="icon-button text-text-muted hover:text-error transition-colors p-1 rounded-full hover:bg-surface-container"
+                                    aria-label={`Delete ${group.name}`}
                                   >
-                                    <span className="material-symbols-outlined text-[18px]" aria-hidden="true">close</span>
+                                    <span className="material-symbols-outlined text-[16px]" aria-hidden="true">delete</span>
+                                  </button>
+                                )}
+                              </div>
+                              <div className="overflow-hidden transition-all duration-300 ease-in-out" style={{ maxHeight: isExpanded ? '500px' : '0', opacity: isExpanded ? 1 : 0, paddingTop: isExpanded ? '0.5rem' : '0', paddingBottom: isExpanded ? '0.5rem' : '0', borderTopWidth: isExpanded ? '1px' : '0' }}>
+                                <div className="space-y-2 mt-2 pt-2 border-t border-border-subtle">
+                                  {group.todos.map((todo) => (
+                                    <div key={todo.id} className="flex items-center gap-2">
+                                      <input
+                                        type="checkbox"
+                                        checked={todo.completed}
+                                        onChange={(e) => updateTodo(group.id, todo.id, { completed: e.target.checked })}
+                                        className="w-4 h-4 accent-primary"
+                                      />
+                                      <input
+                                        type="text"
+                                        value={todo.text}
+                                        onChange={(e) => updateTodo(group.id, todo.id, { text: e.target.value })}
+                                        className="flex-1 bg-transparent border-none focus:outline-none font-body-main text-body-main text-on-surface placeholder:text-text-muted"
+                                        placeholder="Add a task..."
+                                      />
+                                      <button
+                                        onClick={() => deleteTodo(group.id, todo.id)}
+                                        className="icon-button text-text-muted hover:text-error transition-colors p-1 rounded-full hover:bg-surface-container opacity-0 group-hover:opacity-100"
+                                        aria-label="Delete task"
+                                      >
+                                        <span className="material-symbols-outlined text-[18px]" aria-hidden="true">close</span>
+                                      </button>
+                                    </div>
+                                  ))}
+                                  <button
+                                    onClick={() => addTodoToGroup(group.id)}
+                                    className="w-full text-left py-2 text-text-secondary hover:text-primary transition-colors font-body-main text-body-main flex items-center gap-2"
+                                  >
+                                    <span className="material-symbols-outlined text-[18px]">add</span>
+                                    Add task
                                   </button>
                                 </div>
-                              ))}
-                              <button
-                                onClick={() => addTodoToGroup(group.id)}
-                                className="w-full text-left py-2 text-text-secondary hover:text-primary transition-colors font-body-main text-body-main flex items-center gap-2"
-                              >
-                                <span className="material-symbols-outlined text-[18px]">add</span>
-                                Add task
-                              </button>
+                              </div>
                             </div>
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     </div>
 

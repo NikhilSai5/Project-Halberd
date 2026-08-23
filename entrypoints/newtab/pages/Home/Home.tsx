@@ -14,6 +14,7 @@ export default function Home({ showTodoList = true }: HomeProps) {
   const [newTaskText, setNewTaskText] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
   const [taskStates, setTaskStates] = useState<Record<string, boolean>>({});
+  const [expandedGroupId, setExpandedGroupId] = useState<string | null>(null);
 
   const getDayName = () => {
     const days = ["SUNDAY", "MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY"];
@@ -99,6 +100,14 @@ export default function Home({ showTodoList = true }: HomeProps) {
     setActiveGroupId(groupId);
     setAddingTask(false);
     setNewTaskText("");
+  };
+
+  const getIncompleteCount = (group: TodoGroup) => {
+    return group.todos.filter(todo => !taskStates[todo.id] && !todo.completed).length;
+  };
+
+  const handleCircleClick = (groupId: string) => {
+    setExpandedGroupId(expandedGroupId === groupId ? null : groupId);
   };
 
   return (
@@ -260,12 +269,120 @@ export default function Home({ showTodoList = true }: HomeProps) {
           </>
         ) : (
           <div className="flex flex-col items-center justify-center text-center flex-1">
-            <div className="caption-copy text-text-muted uppercase tracking-widest mb-4">
-              {getDayName()}
+            {/* Greeting at top */}
+            <div className="w-full max-w-2xl mx-auto px-4 text-center">
+              <div className="caption-copy text-text-muted uppercase tracking-widest mb-4">
+                {getDayName()}
+              </div>
+              <h1 className={`font-headline-page text-headline-page text-text-primary transition-all duration-300 ${
+                expandedGroupId ? "text-3xl md:text-4xl font-normal" : "text-6xl md:text-7xl font-light"
+              }`}>
+                Good Morning
+              </h1>
+
+              {/* Group Circles */}
+              {todoGroups.length > 0 && (
+                <div className="mt-8 flex items-center justify-center gap-3">
+                  {todoGroups.map((group) => {
+                    const incompleteCount = getIncompleteCount(group);
+                    const isExpanded = expandedGroupId === group.id;
+                    return (
+                      <button
+                        key={group.id}
+                        onClick={() => handleCircleClick(group.id)}
+                        className={`relative w-7 h-7 md:w-8 md:h-8 rounded-full border-2 border-border-subtle bg-surface-container-low glass-panel flex items-center justify-center transition-all duration-300 hover:border-primary hover:shadow-md ${
+                          isExpanded ? "ring-2 ring-primary ring-offset-2 ring-offset-surface-white scale-105" : ""
+                        }`}
+                        aria-label={`${group.name}: ${incompleteCount} tasks remaining`}
+                      >
+                        <span className="text-lg md:text-xl font-light text-text-primary">
+                          {incompleteCount}
+                        </span>
+                        <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 text-[10px] font-medium text-text-primary bg-surface-white rounded border border-border-subtle whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+                          {group.name}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+
+              {todoGroups.length === 0 && (
+                <div className="mt-8 text-center text-text-muted">
+                  <p className="body-copy">No groups yet. Create one in Settings → Productivity.</p>
+                </div>
+              )}
             </div>
-            <h1 className="page-title text-text-primary text-6xl md:text-7xl font-light">
-              Good Morning
-            </h1>
+
+{/* Expanded Group Tasks */}
+            {expandedGroupId && (
+              <div className="w-full max-w-2xl mx-auto px-4 mt-6 animate-fade-in">
+                <div className="bg-surface-white rounded-xl border border-border-subtle p-6 md:p-8 glass-panel">
+                  <div className="space-y-0 max-h-[192px] overflow-y-auto overflow-x-hidden pr-1 scrollbar-hide">
+                    {todoGroups.find(g => g.id === expandedGroupId)?.todos.map((todo) => {
+                      const isCompleted = taskStates[todo.id] || todo.completed;
+                      return (
+                        <label
+                          key={todo.id}
+                          className="flex items-center gap-4 py-3 border-b border-border-subtle cursor-pointer group hover:bg-surface-secondary transition-colors -mx-6 px-6 md:-mx-8 md:px-8"
+                        >
+                          <div className="relative flex items-center justify-center">
+                            <input
+                              type="checkbox"
+                              className="task-checkbox appearance-none w-5 h-5 border border-outline rounded-full checked:bg-primary checked:border-primary transition-colors cursor-pointer focus:ring-0 focus:ring-offset-0"
+                              aria-label={todo.text}
+                              checked={isCompleted}
+                              onChange={() => handleToggleComplete(todo)}
+                            />
+                            <span
+                              className="material-symbols-outlined absolute text-[14px] text-surface-white pointer-events-none opacity-0 transition-opacity peer-checked:opacity-100"
+                              style={{ fontVariationSettings: "'FILL' 1" }}
+                            >
+                              check
+                            </span>
+                          </div>
+                          <span
+                            className={`font-body-main text-body-main text-text-primary group-hover:text-primary transition-colors flex-1 ${
+                              isCompleted ? "text-text-muted line-through" : ""
+                            }`}
+                          >
+                            {todo.text}
+                          </span>
+                          <button
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              handleDeleteTask(todo.id);
+                            }}
+                            className="text-text-muted hover:text-error transition-colors p-1 rounded-full opacity-0 group-hover:opacity-100 focus:opacity-100 focus:outline-none"
+                            aria-label="Delete task"
+                          >
+                            <span className="material-symbols-outlined text-[16px]" aria-hidden="true">close</span>
+                          </button>
+                        </label>
+                      );
+                    })}
+                  </div>
+
+                  {/* Add Task Button - At Bottom */}
+                  <div className="pt-6">
+                    <button
+                      onClick={() => {
+                        setAddingTask(true);
+                        setNewTaskText("");
+                        setTimeout(() => inputRef.current?.focus(), 50);
+                      }}
+                      className="flex items-center gap-2 text-primary font-section-title text-section-title hover:bg-primary-container/30 px-3 py-2 -ml-3 rounded-lg transition-colors group"
+                    >
+                      <span className="material-symbols-outlined text-[18px] group-hover:rotate-90 transition-transform duration-300" style={{ fontVariationSettings: "'FILL' 1" }}>
+                        add
+                      </span>
+                      <span>Add task</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </main>
