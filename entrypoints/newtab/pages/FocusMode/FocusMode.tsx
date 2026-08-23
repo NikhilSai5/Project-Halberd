@@ -212,18 +212,18 @@ export default function FocusMode() {
               
               <div className="focus-timer flex-1 flex items-center justify-center">
                 {isEditingTimer ? (
-                  <input
-                    ref={timerInputRef}
-                    type="text"
-                    value={editTimerValue}
-                    onChange={handleTimerEditChange}
-                    onKeyDown={handleTimerEditKeyDown}
-                    onBlur={handleTimerEditBlur}
-                    onDoubleClick={(e) => e.stopPropagation()}
-                    className="font-display-timer text-display-timer text-text-primary tracking-tight text-[72px] leading-none text-center bg-transparent border-none focus:outline-none w-40"
-                    maxLength={5}
-                    autoFocus
-                  />
+<input
+                      ref={timerInputRef}
+                      type="text"
+                      value={editTimerValue}
+                      onChange={handleTimerEditChange}
+                      onKeyDown={handleTimerEditKeyDown}
+                      onBlur={handleTimerEditBlur}
+                      onDoubleClick={(e) => e.stopPropagation()}
+                      className="font-display-timer text-display-timer text-text-primary tracking-tight text-[72px] leading-none text-center bg-transparent border-none focus:outline-none w-56"
+                      maxLength={5}
+                      autoFocus
+                    />
                 ) : (
                   <div
                     className="font-display-timer text-display-timer text-text-primary tracking-tight text-[72px] leading-none cursor-pointer hover:opacity-80 transition-opacity"
