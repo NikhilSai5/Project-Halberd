@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { useSettings, type TodoGroup, type TodoItem } from '@/lib/SettingsContext';
+import { useSettings, type TodoGroup, type TodoItem, type WallpaperFile } from '@/lib/SettingsContext';
 
 const navItems = [
   { icon: "palette", label: "Appearance", id: "appearance" },
@@ -19,13 +19,6 @@ const accentColors = [
   { color: "#E8A65D", label: "Orange", selected: false },
   { color: "#add6fa", label: "Blue", selected: false, border: true },
 ];
-
-interface WallpaperFile {
-  id: string;
-  name: string;
-  preview: string;
-  file: File;
-}
 
 interface WeeklyGoal {
   id: string;
@@ -46,19 +39,18 @@ export default function Settings() {
   const [transparency, setTransparency] = useState(95);
   const [selectedAccent, setSelectedAccent] = useState("#486551");
 
-  // Wallpaper state
-  const [wallpapers, setWallpapers] = useState<WallpaperFile[]>([]);
-  const [slideshowEnabled, setSlideshowEnabled] = useState(false);
-  const [slideshowInterval, setSlideshowInterval] = useState("30min");
-  const [liveWallpaperEnabled, setLiveWallpaperEnabled] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const folderInputRef = useRef<HTMLInputElement>(null);
-
-  // Layout state
-  const [navbarLocation, setNavbarLocation] = useState<"bottom-center" | "left" | "right">("bottom-center");
-
-  // Productivity state
+  // Wallpaper state from context
   const { 
+    wallpapers, 
+    addWallpaper, 
+    removeWallpaper, 
+    clearAllWallpapers,
+    activeWallpaper,
+    setActiveWallpaper,
+    wallpaperBlur,
+    setWallpaperBlur,
+    wallpaperDarkness,
+    setWallpaperDarkness,
     todoGroups, 
     addTodoGroup, 
     updateTodoGroupName, 
@@ -69,6 +61,17 @@ export default function Settings() {
     showTodoListInHome, 
     setShowTodoListInHome 
   } = useSettings();
+  
+  const [slideshowEnabled, setSlideshowEnabled] = useState(false);
+  const [slideshowInterval, setSlideshowInterval] = useState("30min");
+  const [liveWallpaperEnabled, setLiveWallpaperEnabled] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const folderInputRef = useRef<HTMLInputElement>(null);
+
+  // Layout state
+  const [navbarLocation, setNavbarLocation] = useState<"bottom-center" | "left" | "right">("bottom-center");
+
+  // Productivity state
   const [showCompletedTasks, setShowCompletedTasks] = useState(true);
   const [expandedGroupIds, setExpandedGroupIds] = useState<Set<string>>(new Set());
 
@@ -127,13 +130,22 @@ export default function Settings() {
 
       const reader = new FileReader();
       reader.onload = (event) => {
-        const newWallpaper: WallpaperFile = {
-          id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-          name: file.name,
-          preview: event.target?.result as string,
-          file,
-        };
-        setWallpapers((prev) => [...prev, newWallpaper]);
+        try {
+          const result = event.target?.result;
+          if (typeof result === "string") {
+            const newWallpaper: WallpaperFile = {
+              id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+              name: file.name,
+              preview: result,
+            };
+            addWallpaper(newWallpaper);
+          }
+        } catch (err) {
+          console.error("Failed to add wallpaper:", err);
+        }
+      };
+      reader.onerror = () => {
+        console.error("FileReader error:", reader.error);
       };
       reader.readAsDataURL(file);
     });
@@ -156,23 +168,14 @@ export default function Settings() {
           id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
           name: file.name,
           preview: event.target?.result as string,
-          file,
         };
-        setWallpapers((prev) => [...prev, newWallpaper]);
+        addWallpaper(newWallpaper);
       };
       reader.readAsDataURL(file);
     });
 
     // Reset input value
     if (e.target) e.target.value = "";
-  };
-
-  const removeWallpaper = (id: string) => {
-    setWallpapers((prev) => prev.filter((w) => w.id !== id));
-  };
-
-  const clearAllWallpapers = () => {
-    setWallpapers([]);
   };
 
   // Goals functions
@@ -219,7 +222,7 @@ export default function Settings() {
   };
 
   return (
-    <div className="page-shell page-shell--centered bg-background text-on-surface flex flex-col font-body-main antialiased selection:bg-secondary-container selection:text-on-secondary-container">
+    <div className="page-shell page-shell--centered text-on-surface flex flex-col font-body-main antialiased selection:bg-secondary-container selection:text-on-secondary-container">
       <header className="w-full top-0 px-[20px] pt-[20px]">
         {/* <div className="flex justify-between items-center max-w-[1440px] mx-auto w-full">
           <div className="font-headline-page text-headline-page font-medium text-on-surface flex items-center gap-2">
@@ -422,7 +425,7 @@ export default function Settings() {
                         )}
                       </div>
                       <div className="space-y-4">
-                        <label className="settings-file-dropzone relative cursor-pointer rounded-xl  border-border-subtle bg-surface-container-low transition-all hover:border-primary hover:bg-surface-container focus-within:border-primary focus-within:bg-surface-container">
+                        <label className="relative cursor-pointer">
                           <input
                             ref={fileInputRef}
                             type="file"
@@ -432,30 +435,43 @@ export default function Settings() {
                             className="sr-only"
                             aria-label="Upload wallpaper images"
                           />
-                          <div className="flex flex-col items-center gap-3 text-center">
-                            <span className="material-symbols-outlined text-4xl text-text-muted transition-colors">cloud_upload</span>
-                            <div className="font-body-main text-body-main text-text-primary">Drag & drop images here</div>
-                            <div className="label-copy text-text-secondary">or click to browse</div>
-                            <div className="label-copy text-text-muted">PNG, JPG, WebP up to 10MB each</div>
-                          </div>
+                          <button
+                            type="button"
+                            className="w-20 h-20 rounded-xl border-2 border-border-subtle bg-surface-container-low hover:border-primary hover:bg-surface-container transition-all flex flex-col items-center justify-center gap-2"
+                          >
+                            <span className="material-symbols-outlined text-3xl text-text-muted">cloud_upload</span>
+                            <span className="label-copy text-text-secondary">Upload</span>
+                          </button>
                         </label>
                         {wallpapers.length > 0 && (
                           <>
                             <div className="flex items-center justify-between text-sm text-text-secondary">
-                              <span>{wallpapers.length} image{wallpapers.length !== 1 ? "s" : ""} selected</span>
+                              <span>{wallpapers.length} image{wallpapers.length !== 1 ? "s" : ""} uploaded</span>
                             </div>
                             <div className="wallpaper-preview-grid">
                               {wallpapers.map((wp) => (
-                                <div key={wp.id} className="relative aspect-square rounded-lg overflow-hidden border border-border-subtle bg-surface-container-low">
+                                <div key={wp.id} className={`relative aspect-square rounded-lg overflow-hidden border-2 transition-all ${
+                                  activeWallpaper === wp.id ? "border-primary" : "border-border-subtle"
+                                } bg-surface-container-low cursor-pointer`} onClick={() => setActiveWallpaper(wp.id)}>
                                   <img src={wp.preview} alt={wp.name} className="w-full h-full object-cover" />
+                                  <div className="absolute inset-0 bg-black/30 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity">
+                                    {activeWallpaper === wp.id ? (
+                                      <span className="material-symbols-outlined text-white text-3xl">check_circle</span>
+                                    ) : (
+                                      <span className="material-symbols-outlined text-white text-3xl">check_circle_outline</span>
+                                    )}
+                                  </div>
                                   <button
-                                    onClick={() => removeWallpaper(wp.id)}
-                                    className="wallpaper-remove-btn"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      removeWallpaper(wp.id);
+                                    }}
+                                    className="absolute top-1 right-1 w-6 h-6 rounded-full bg-black/50 text-white flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity"
                                     aria-label={`Remove ${wp.name}`}
                                   >
-                                    <span className="material-symbols-outlined text-[18px]">close</span>
+                                    <span className="material-symbols-outlined text-[16px]">close</span>
                                   </button>
-                                  <div className="wallpaper-name-overlay">
+                                  <div className="wallpaper-name-overlay absolute bottom-0 left-0 right-0 p-2 bg-gradient-to-t from-black/60 to-transparent text-white text-xs truncate">
                                     {wp.name}
                                   </div>
                                 </div>
@@ -463,6 +479,38 @@ export default function Settings() {
                             </div>
                           </>
                         )}
+                      </div>
+                    </div>
+
+                    <div className="settings-section">
+                      <h4 className="section-heading text-text-primary">Background Adjustments</h4>
+                      <div className="settings-slider-group">
+                        <div className="flex justify-between items-center">
+                          <label className="font-body-main text-body-main text-on-surface">Background Blur</label>
+                          <span className="font-label-secondary text-label-secondary text-text-secondary">{wallpaperBlur}px</span>
+                        </div>
+                        <input
+                          type="range"
+                          min="0"
+                          max="24"
+                          value={wallpaperBlur}
+                          onChange={(e) => setWallpaperBlur(Number(e.target.value))}
+                          className="settings-slider w-full bg-surface-container-high rounded-full appearance-none cursor-pointer accent-primary"
+                        />
+                      </div>
+                      <div className="settings-slider-group">
+                        <div className="flex justify-between items-center">
+                          <label className="font-body-main text-body-main text-on-surface">Background Darkness</label>
+                          <span className="font-label-secondary text-label-secondary text-text-secondary">{wallpaperDarkness}%</span>
+                        </div>
+                        <input
+                          type="range"
+                          min="0"
+                          max="70"
+                          value={wallpaperDarkness}
+                          onChange={(e) => setWallpaperDarkness(Number(e.target.value))}
+                          className="settings-slider w-full bg-surface-container-high rounded-full appearance-none cursor-pointer accent-primary"
+                        />
                       </div>
                     </div>
 

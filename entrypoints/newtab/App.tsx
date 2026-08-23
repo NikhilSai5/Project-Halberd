@@ -17,7 +17,13 @@ type Page = "home" | "pomodoro" | "weekly-goal" | "focus" | "tools" | "settings"
 type NavbarPosition = "bottom-center" | "left" | "right";
 
 function AppContent() {
-  const { showTodoListInHome } = useSettings();
+  const {
+    showTodoListInHome,
+    wallpapers,
+    activeWallpaper,
+    wallpaperBlur,
+    wallpaperDarkness,
+  } = useSettings();
   const [currentPage, setCurrentPage] = useState<Page>("home");
   const [focusTrigger, setFocusTrigger] = useState<"center_focus_strong" | "analytics">("analytics");
   const [navbarPosition, setNavbarPosition] = useState<NavbarPosition>("bottom-center");
@@ -54,17 +60,34 @@ function AppContent() {
     return "center_focus_strong";
   };
 
+  const selectedWallpaper = wallpapers.find((wallpaper) => wallpaper.id === activeWallpaper);
+
+  const backgroundStyle = selectedWallpaper ? {
+    backgroundImage: `url("${selectedWallpaper.preview}")`,
+    backgroundSize: 'cover',
+    backgroundPosition: 'center',
+    backgroundRepeat: 'no-repeat',
+  } : {};
+  const effectsStyle = {
+    "--wallpaper-blur": `${wallpaperBlur}px`,
+    "--wallpaper-darkness": `${wallpaperDarkness / 100}`,
+  } as React.CSSProperties;
+
   return (
-    <div className="app-shell">
-      <Navbar activeItem={getActiveItem()} onNavClick={handleNavClick} position={navbarPosition} />
-      {currentPage === "home" && <Home showTodoList={showTodoListInHome} />}
-      {currentPage === "pomodoro" && <Pomodoro />}
-      {currentPage === "weekly-goal" && <WeeklyGoal />}
-      {currentPage === "focus" && <FocusMode />}
-      {currentPage === "tools" && <Tools />}
-      {currentPage === "settings" && <Settings />}
-      {currentPage === "calendar" && <Calendar />}
-      {currentPage === "habit-tracker" && <HabitTracker />}
+    <div className="app-shell" style={effectsStyle}>
+      <div className="wallpaper-image" style={backgroundStyle} aria-hidden="true" />
+      <div className="wallpaper-effects" aria-hidden="true" />
+      <div className="app-shell-content">
+        <Navbar activeItem={getActiveItem()} onNavClick={handleNavClick} position={navbarPosition} />
+        {currentPage === "home" && <Home showTodoList={showTodoListInHome} />}
+        {currentPage === "pomodoro" && <Pomodoro />}
+        {currentPage === "weekly-goal" && <WeeklyGoal />}
+        {currentPage === "focus" && <FocusMode />}
+        {currentPage === "tools" && <Tools />}
+        {currentPage === "settings" && <Settings />}
+        {currentPage === "calendar" && <Calendar />}
+        {currentPage === "habit-tracker" && <HabitTracker />}
+      </div>
     </div>
   );
 }

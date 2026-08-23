@@ -16,7 +16,6 @@
   :root {
     font-family: "Inter", sans-serif;
     color: #242424;
-    background: #f9f9f7;
     --workspace-shadow: 0 10px 30px rgba(0, 0, 0, 0.02);
   }
 
@@ -25,12 +24,13 @@
     height: 100%;
     margin: 0;
     overflow: hidden;
-    background-color: #f9f9f7;
+    background-color: transparent;
   }
 
   #root {
     height: 100vh;
     overflow: hidden;
+    background-color: transparent;
   }
 
   button,
@@ -58,6 +58,46 @@
 }
 
 @layer components {
+  .app-shell {
+    height: 100vh;
+    width: 100vw;
+    position: fixed;
+    top: 0;
+    left: 0;
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    z-index: 0;
+  }
+
+  .wallpaper-effects {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    background: rgba(0, 0, 0, var(--wallpaper-darkness, 0));
+    backdrop-filter: blur(var(--wallpaper-blur, 0px));
+    -webkit-backdrop-filter: blur(var(--wallpaper-blur, 0px));
+  }
+
+  .wallpaper-image {
+    position: absolute;
+    inset: calc(var(--wallpaper-blur, 0px) * -1);
+    z-index: 0;
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    filter: blur(var(--wallpaper-blur, 0px));
+  }
+
+  .app-shell-content {
+    position: relative;
+    z-index: 1;
+    height: 100%;
+  }
+
+
+
   .page-shell {
     height: 100vh;
     min-height: 0;

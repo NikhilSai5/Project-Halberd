@@ -1,6 +1,7 @@
 "use client";
 
 import { createContext, useContext, useState, useEffect, type ReactNode } from "react";
+import { getWallpapers, addWallpaperToDB, removeWallpaperFromDB, clearAllWallpapersFromDB } from '@/lib/db';
 
 export interface TodoItem {
   id: string;
@@ -21,6 +22,12 @@ export interface Habit {
   tracking: Record<string, "done" | "missed" | "upcoming">;
 }
 
+export interface WallpaperFile {
+  id: string;
+  name: string;
+  preview: string;
+}
+
 interface SettingsContextType {
   showTodoListInHome: boolean;
   setShowTodoListInHome: (value: boolean) => void;
@@ -37,6 +44,17 @@ interface SettingsContextType {
   updateHabit: (habitId: string, updates: Partial<Habit>) => void;
   deleteHabit: (habitId: string) => void;
   toggleHabitDate: (habitId: string, date: string) => void;
+  wallpapers: WallpaperFile[];
+  setWallpapers: (wallpapers: WallpaperFile[]) => void;
+  addWallpaper: (wallpaper: WallpaperFile) => void;
+  removeWallpaper: (id: string) => void;
+  clearAllWallpapers: () => void;
+  activeWallpaper: string | null;
+  setActiveWallpaper: (id: string | null) => void;
+  wallpaperBlur: number;
+  setWallpaperBlur: (value: number) => void;
+  wallpaperDarkness: number;
+  setWallpaperDarkness: (value: number) => void;
 }
 
 const SettingsContext = createContext<SettingsContextType | undefined>(undefined);
@@ -89,6 +107,10 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   const [showTodoListInHome, setShowTodoListInHome] = useState(true);
   const [todoGroups, setTodoGroups] = useState<TodoGroup[]>(DEFAULT_GROUPS);
   const [habits, setHabits] = useState<Habit[]>(DEFAULT_HABITS);
+  const [wallpapers, setWallpapers] = useState<WallpaperFile[]>([]);
+  const [activeWallpaper, setActiveWallpaper] = useState<string | null>(null);
+  const [wallpaperBlur, setWallpaperBlur] = useState(0);
+  const [wallpaperDarkness, setWallpaperDarkness] = useState(0);
   const [initialized, setInitialized] = useState(false);
 
   useEffect(() => {
@@ -157,6 +179,45 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     setInitialized(true);
   }, []);
 
+useEffect(() => {
+    const storedWallpapers = localStorage.getItem("wallpapers");
+    if (storedWallpapers !== null) {
+      try {
+        const parsed = JSON.parse(storedWallpapers);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setWallpapers(parsed);
+          // Migrate existing wallpapers to IndexedDB
+          parsed.forEach((wp: WallpaperFile) => {
+            addWallpaperToDB(wp).catch(() => {});
+          });
+        }
+      } catch {
+        // ignore parse errors
+      }
+    }
+    const storedActiveWallpaper = localStorage.getItem("activeWallpaper");
+    if (storedActiveWallpaper !== null) {
+      try {
+        setActiveWallpaper(JSON.parse(storedActiveWallpaper));
+      } catch {
+        setActiveWallpaper(storedActiveWallpaper);
+      }
+    }
+    const storedWallpaperBlur = localStorage.getItem("wallpaperBlur");
+    if (storedWallpaperBlur !== null) setWallpaperBlur(Number(storedWallpaperBlur) || 0);
+    const storedWallpaperDarkness = localStorage.getItem("wallpaperDarkness");
+    if (storedWallpaperDarkness !== null) setWallpaperDarkness(Number(storedWallpaperDarkness) || 0);
+    
+    // Load wallpapers from IndexedDB
+    getWallpapers().then((wps) => {
+      if (wps.length > 0) {
+        setWallpapers(wps);
+      }
+    }).catch(() => {});
+
+    setInitialized(true);
+  }, []);
+
   useEffect(() => {
     if (!initialized) return;
     localStorage.setItem("showTodoListInHome", JSON.stringify(showTodoListInHome));
@@ -171,6 +232,28 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     if (!initialized) return;
     localStorage.setItem("habits", JSON.stringify(habits));
   }, [habits, initialized]);
+
+  useEffect(() => {
+    if (!initialized) return;
+    wallpapers.forEach((wp) => {
+      addWallpaperToDB(wp).catch(() => {});
+    });
+  }, [wallpapers, initialized]);
+
+  useEffect(() => {
+    if (!initialized) return;
+    localStorage.setItem("activeWallpaper", JSON.stringify(activeWallpaper));
+  }, [activeWallpaper, initialized]);
+
+  useEffect(() => {
+    if (!initialized) return;
+    localStorage.setItem("wallpaperBlur", String(wallpaperBlur));
+  }, [wallpaperBlur, initialized]);
+
+  useEffect(() => {
+    if (!initialized) return;
+    localStorage.setItem("wallpaperDarkness", String(wallpaperDarkness));
+  }, [wallpaperDarkness, initialized]);
 
   const addTodoGroup = (name?: string) => {
     const newGroup: TodoGroup = {
@@ -259,6 +342,30 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     );
   };
 
+  const addWallpaper = (wallpaper: WallpaperFile) => {
+    setWallpapers((prev) => {
+      if (prev.length === 0) {
+        setActiveWallpaper(wallpaper.id);
+      }
+      return [...prev, wallpaper];
+    });
+    addWallpaperToDB(wallpaper).catch(() => {});
+  };
+
+  const removeWallpaper = (id: string) => {
+    setWallpapers((prev) => prev.filter((w) => w.id !== id));
+    if (activeWallpaper === id) {
+      setActiveWallpaper(null);
+    }
+    removeWallpaperFromDB(id).catch(() => {});
+  };
+
+  const clearAllWallpapers = () => {
+    setWallpapers([]);
+    setActiveWallpaper(null);
+    clearAllWallpapersFromDB().catch(() => {});
+  };
+
   return (
     <SettingsContext.Provider
       value={{
@@ -277,6 +384,17 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
         updateHabit,
         deleteHabit,
         toggleHabitDate,
+        wallpapers,
+        setWallpapers,
+        addWallpaper,
+        removeWallpaper,
+        clearAllWallpapers,
+        activeWallpaper,
+        setActiveWallpaper,
+        wallpaperBlur,
+        setWallpaperBlur,
+        wallpaperDarkness,
+        setWallpaperDarkness,
       }}
     >
       {children}

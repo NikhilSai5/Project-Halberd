@@ -55,10 +55,10 @@ export default function Navbar({ activeItem, navItems = defaultNavItems, onNavCl
   return (
     <>
       {/* Top Navigation (Desktop) */}
-      <nav className="top-navigation hidden md:flex" aria-label="Desktop header">
-        <div className="brand-desktop font-headline-page text-headline-page font-medium text-text-primary dark:text-surface-white">Halberd</div>
+      <nav className="top-navigation hidden md:flex " aria-label="Desktop header">
+        <div className="brand-desktop font-headline-page text-headline-page font-medium text-text-primary dark:text-surface-white text-white">Halberd</div>
         <div className="flex items-center gap-6">
-          <span className="top-header-unavailable material-symbols-outlined text-text-muted" aria-hidden="true" data-icon="close">close</span>
+          <span className="top-header-unavailable material-symbols-outlined text-text-muted text-white" aria-hidden="true" data-icon="close">close</span>
         </div>
       </nav>
       {/* Top Navigation (Mobile) */}
@@ -98,7 +98,7 @@ export default function Navbar({ activeItem, navItems = defaultNavItems, onNavCl
             ))}
           </nav>
           <div className="dock-meta dock-meta--right hidden sm:flex text-text-muted">
-            <div className="flex items-center gap-1 mr-4">
+            <div className="flex items-center gap-1 mr-4 text-white">
               <span className="material-symbols-outlined text-[18px] text-text-secondary" aria-hidden="true">light_mode</span>
               <span className="font-label-secondary text-label-secondary text-text-secondary">24°</span>
             </div>

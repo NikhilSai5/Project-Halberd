@@ -335,7 +335,7 @@ export default function Pomodoro() {
   // --------------------------------------------------
 
   return (
-    <div className="page-shell page-shell--centered bg-background text-on-background font-body-main relative items-center justify-center">
+    <div className="page-shell page-shell--centered text-on-background font-body-main relative items-center justify-center">
 
       <audio
         ref={audioRef}

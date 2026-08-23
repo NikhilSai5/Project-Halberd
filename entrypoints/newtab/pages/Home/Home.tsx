@@ -121,7 +121,7 @@ export default function Home({ showTodoList = true }: HomeProps) {
               <div className="caption-copy text-text-muted uppercase tracking-widest mb-2">
                 {getDayName()}
               </div>
-              <h1 className="page-title text-text-primary">
+              <h1 className="page-title text-text-primary ">
                 Good morning.
               </h1>
             </div>
@@ -181,7 +181,7 @@ export default function Home({ showTodoList = true }: HomeProps) {
                           </span>
                         </div>
                         <span
-                          className={`font-body-main text-body-main text-text-primary group-hover:text-primary transition-colors flex-1 ${
+                          className={`font-body-main text-body-main text-text-primary group-hover:text-primary transition-colors flex-1 text-left ${
                             isCompleted ? "text-text-muted line-through" : ""
                           }`}
                         >
@@ -342,7 +342,7 @@ export default function Home({ showTodoList = true }: HomeProps) {
                             </span>
                           </div>
                           <span
-                            className={`font-body-main text-body-main text-text-primary group-hover:text-primary transition-colors flex-1 ${
+                            className={`font-body-main text-body-main text-text-primary group-hover:text-primary transition-colors flex-1 text-left ${
                               isCompleted ? "text-text-muted line-through" : ""
                             }`}
                           >
