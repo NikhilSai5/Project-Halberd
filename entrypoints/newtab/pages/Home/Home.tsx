@@ -144,53 +144,64 @@ export default function Home({ showTodoList = true }: HomeProps) {
               </div>
             )}
 
-            {/* Task List - Minimal Flat Design */}
+            {/* Task List - Exact Design from HTML */}
             {activeGroup && (
-              <div className="w-full max-w-2xl mx-auto p-5 bg-[#FFFFFF] rounded-lg shadow-sm border border-border-subtle/50">
+              <div className="w-full max-w-2xl mx-auto bg-surface-white rounded-xl border border-border-subtle p-6 md:p-8 glass-panel">
                 {/* Task List */}
-                <div className="space-y-0">
+                <div className="space-y-0 max-h-[192px] overflow-y-auto overflow-x-hidden pr-1 scrollbar-hide">
                   {sortedTodos.map((todo, index) => {
                     const isCompleted = taskStates[todo.id] || todo.completed;
                     return (
-                      <div
+                      <label
                         key={todo.id}
-                        className={`flex items-center gap-4 py-5 border-b border-border-subtle/50 last:border-0 ${
-                          isCompleted ? "opacity-50" : ""
-                        }`}
+                        className="flex items-center gap-4 py-3 border-b border-border-subtle cursor-pointer group hover:bg-surface-secondary transition-colors -mx-6 px-6 md:-mx-8 md:px-8"
                       >
-                        <input
-                          type="checkbox"
-                          className="w-6 h-6 accent-primary cursor-pointer flex-shrink-0 rounded-full border-2 border-border-subtle bg-transparent appearance-none transition-colors hover:border-primary/50 focus:outline-none focus:ring-2 focus:ring-primary/20"
-                          aria-label={todo.text}
-                          checked={isCompleted}
-                          onChange={() => handleToggleComplete(todo)}
-                          style={{
-                            WebkitAppearance: 'none',
-                            MozAppearance: 'none',
-                            appearance: 'none',
-                          }}
-                        />
+                        <div className="relative flex items-center justify-center">
+                          <input
+                            type="checkbox"
+                            className="task-checkbox appearance-none w-5 h-5 border border-outline rounded-full checked:bg-primary checked:border-primary transition-colors cursor-pointer focus:ring-0 focus:ring-offset-0"
+                            aria-label={todo.text}
+                            checked={isCompleted}
+                            onChange={() => handleToggleComplete(todo)}
+                          />
+                          <span
+                            className="material-symbols-outlined absolute text-[14px] text-surface-white pointer-events-none opacity-0 transition-opacity peer-checked:opacity-100"
+                            style={{ fontVariationSettings: "'FILL' 1" }}
+                          >
+                            check
+                          </span>
+                        </div>
                         <span
-                          className={`text-body-main transition-colors break-words ${
-                            isCompleted ? "text-text-muted line-through" : "text-text-primary"
+                          className={`font-body-main text-body-main text-text-primary group-hover:text-primary transition-colors flex-1 ${
+                            isCompleted ? "text-text-muted line-through" : ""
                           }`}
-                          style={{ fontSize: '16px', fontWeight: 400 }}
                         >
                           {todo.text}
                         </span>
-                      </div>
+                        <button
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            handleDeleteTask(todo.id);
+                          }}
+                          className="text-text-muted hover:text-error transition-colors p-1 rounded-full opacity-0 group-hover:opacity-100 focus:opacity-100 focus:outline-none"
+                          aria-label="Delete task"
+                        >
+                          <span className="material-symbols-outlined text-[16px]" aria-hidden="true">close</span>
+                        </button>
+                      </label>
                     );
                   })}
                   {sortedTodos.length === 0 && !addingTask && (
-                    <div className="py-12 text-center text-text-muted">
-                      <p className="text-body-main" style={{ fontSize: '16px', fontWeight: 400 }}>No tasks yet. Add one below.</p>
+                    <div className="py-12 text-center text-text-muted -mx-6 px-6 md:-mx-8 md:px-8">
+                      <p className="font-body-main text-body-main text-text-muted">No tasks yet. Add one below.</p>
                     </div>
                   )}
                 </div>
 
                 {/* Add Task Form - At Bottom */}
                 {addingTask ? (
-                  <form onSubmit={handleSubmitTask} className="mt-6 pt-6 border-t border-border-subtle/50">
+                  <form onSubmit={handleSubmitTask} className="mt-6 pt-6 border-t border-border-subtle -mx-6 px-6 md:-mx-8 md:px-8">
                     <div className="relative">
                       <input
                         ref={inputRef}
@@ -206,9 +217,8 @@ export default function Home({ showTodoList = true }: HomeProps) {
                           } else setAddingTask(false);
                         }}
                         placeholder="What needs to be done?"
-                        className="w-full bg-transparent border-none focus:outline-none font-body-main text-text-primary placeholder:text-text-muted py-3 text-base"
+                        className="w-full bg-transparent border-none focus:outline-none font-body-main text-body-main text-text-primary placeholder:text-text-muted py-2"
                         autoFocus
-                        style={{ fontSize: '16px', fontWeight: 400 }}
                       />
                       <button
                         type="submit"
@@ -221,16 +231,17 @@ export default function Home({ showTodoList = true }: HomeProps) {
                     </div>
                   </form>
                 ) : (
-                  <button
-                    onClick={handleAddTaskClick}
-                    className="w-full text-left py-3 mt-6 pt-6 border-t border-border-subtle/50 text-text-secondary hover:text-primary transition-colors font-body-main flex items-center gap-3 group"
-                    style={{ fontSize: '16px', fontWeight: 400 }}
-                  >
-                    <span className="material-symbols-outlined text-[22px] group-hover:rotate-90 transition-transform duration-300" style={{ fontVariationSettings: "'FILL' 1" }}>
-                      add
-                    </span>
-                    <span>Add task</span>
-                  </button>
+                  <div className="pt-6">
+                    <button
+                      onClick={handleAddTaskClick}
+                      className="flex items-center gap-2 text-primary font-section-title text-section-title hover:bg-primary-container/30 px-3 py-2 -ml-3 rounded-lg transition-colors group"
+                    >
+                      <span className="material-symbols-outlined text-[18px] group-hover:rotate-90 transition-transform duration-300" style={{ fontVariationSettings: "'FILL' 1" }}>
+                        add
+                      </span>
+                      <span>Add task</span>
+                    </button>
+                  </div>
                 )}
               </div>
             )}

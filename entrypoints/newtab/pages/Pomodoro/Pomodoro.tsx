@@ -678,7 +678,7 @@ export default function Pomodoro() {
                 role="group"
                 aria-label="Pomodoro session progress"
               >
-                {[1, 2, 3, 4].map((i) => (
+                {/* {[1, 2, 3, 4].map((i) => (
                   <div
                     key={i}
                     className={`w-2 h-2 rounded-full transition-colors ${
@@ -687,7 +687,7 @@ export default function Pomodoro() {
                         : "bg-surface-container-high"
                     }`}
                   />
-                ))}
+                ))} */}
               </div>
 
             </>
