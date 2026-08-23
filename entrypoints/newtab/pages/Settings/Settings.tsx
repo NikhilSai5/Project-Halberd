@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
+import { useSettings, type TodoGroup, type TodoItem } from '@/lib/SettingsContext';
 
 const navItems = [
   { icon: "palette", label: "Appearance", id: "appearance" },
@@ -24,18 +25,6 @@ interface WallpaperFile {
   name: string;
   preview: string;
   file: File;
-}
-
-interface TodoItem {
-  id: string;
-  text: string;
-  completed: boolean;
-}
-
-interface TodoGroup {
-  id: string;
-  name: string;
-  todos: TodoItem[];
 }
 
 interface WeeklyGoal {
@@ -69,11 +58,18 @@ export default function Settings() {
   const [navbarLocation, setNavbarLocation] = useState<"bottom-center" | "left" | "right">("bottom-center");
 
   // Productivity state
-  const [todoGroups, setTodoGroups] = useState<TodoGroup[]>([
-    { id: "1", name: "Personal", todos: [] },
-  ]);
+  const { 
+    todoGroups, 
+    addTodoGroup, 
+    updateTodoGroupName, 
+    deleteTodoGroup, 
+    addTodoToGroup, 
+    updateTodo, 
+    deleteTodo,
+    showTodoListInHome, 
+    setShowTodoListInHome 
+  } = useSettings();
   const [showCompletedTasks, setShowCompletedTasks] = useState(true);
-  const [showTodoListInHome, setShowTodoListInHome] = useState(true);
 
   // Goals state
   const [weeklyGoals, setWeeklyGoals] = useState<WeeklyGoal[]>([
@@ -164,65 +160,6 @@ export default function Settings() {
 
   const clearAllWallpapers = () => {
     setWallpapers([]);
-  };
-
-  // Todo group functions
-  const addTodoGroup = () => {
-    const newGroup: TodoGroup = {
-      id: `${Date.now()}`,
-      name: `Group ${todoGroups.length + 1}`,
-      todos: [],
-    };
-    setTodoGroups((prev) => [...prev, newGroup]);
-  };
-
-  const updateTodoGroupName = (groupId: string, name: string) => {
-    setTodoGroups((prev) =>
-      prev.map((g) => (g.id === groupId ? { ...g, name } : g))
-    );
-  };
-
-  const deleteTodoGroup = (groupId: string) => {
-    if (todoGroups.length <= 1) return; // Keep at least one group
-    setTodoGroups((prev) => prev.filter((g) => g.id !== groupId));
-  };
-
-  const addTodoToGroup = (groupId: string) => {
-    const newTodo: TodoItem = {
-      id: `${Date.now()}`,
-      text: "",
-      completed: false,
-    };
-    setTodoGroups((prev) =>
-      prev.map((g) =>
-        g.id === groupId ? { ...g, todos: [...g.todos, newTodo] } : g
-      )
-    );
-  };
-
-  const updateTodo = (groupId: string, todoId: string, updates: Partial<TodoItem>) => {
-    setTodoGroups((prev) =>
-      prev.map((g) =>
-        g.id === groupId
-          ? {
-              ...g,
-              todos: g.todos.map((t) =>
-                t.id === todoId ? { ...t, ...updates } : t
-              ),
-            }
-          : g
-      )
-    );
-  };
-
-  const deleteTodo = (groupId: string, todoId: string) => {
-    setTodoGroups((prev) =>
-      prev.map((g) =>
-        g.id === groupId
-          ? { ...g, todos: g.todos.filter((t) => t.id !== todoId) }
-          : g
-      )
-    );
   };
 
   // Goals functions
@@ -696,7 +633,7 @@ export default function Settings() {
                     <div className="settings-section">
                       <div className="flex items-center justify-between mb-4">
                         <h4 className="section-heading text-text-primary">Todo Groups</h4>
-                        <button onClick={addTodoGroup} className="button-regular font-section-title text-section-title group">
+                        <button onClick={() => addTodoGroup()} className="button-regular font-section-title text-section-title group">
                           <span className="material-symbols-outlined text-[18px] group-hover:rotate-90 transition-transform duration-300" style={{ fontVariationSettings: "'FILL' 1" }}>add</span>
                           Add Group
                         </button>

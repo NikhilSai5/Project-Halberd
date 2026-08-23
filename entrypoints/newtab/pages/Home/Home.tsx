@@ -1,30 +1,19 @@
 "use client";
 
-import { useState } from "react";
-
-interface Task {
-  id: number;
-  text: string;
-  completed: boolean;
-}
-
-const tasks: Task[] = [
-  { id: 1, text: "Finish project documentation", completed: false },
-  { id: 2, text: "Study Japanese", completed: false },
-  { id: 3, text: "Build Halberd", completed: false },
-  { id: 4, text: "Read documentation", completed: false },
-];
+import { useState, useRef, useEffect, useMemo } from "react";
+import { useSettings, type TodoGroup, type TodoItem } from '@/lib/SettingsContext';
 
 interface HomeProps {
   showTodoList?: boolean;
 }
 
 export default function Home({ showTodoList = true }: HomeProps) {
-  const [taskStates, setTaskStates] = useState<Record<number, boolean>>({});
-
-  const toggleTask = (id: number) => {
-    setTaskStates(prev => ({ ...prev, [id]: !prev[id] }));
-  };
+  const { todoGroups, addTodoToGroup, updateTodo, deleteTodo } = useSettings();
+  const [activeGroupId, setActiveGroupId] = useState<string | null>(null);
+  const [addingTask, setAddingTask] = useState(false);
+  const [newTaskText, setNewTaskText] = useState("");
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [taskStates, setTaskStates] = useState<Record<string, boolean>>({});
 
   const getDayName = () => {
     const days = ["SUNDAY", "MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY"];
@@ -33,76 +22,241 @@ export default function Home({ showTodoList = true }: HomeProps) {
     return `${days[now.getDay()]} · ${months[now.getMonth()]} ${now.getDate()}`;
   };
 
+  useEffect(() => {
+    if (todoGroups.length > 0 && !activeGroupId) {
+      setActiveGroupId(todoGroups[0]!.id);
+    }
+  }, [todoGroups, activeGroupId]);
+
+  const activeGroup = todoGroups.find(g => g.id === activeGroupId);
+
+  useEffect(() => {
+    if (activeGroup) {
+      const initialStates: Record<string, boolean> = {};
+      activeGroup.todos.forEach(todo => {
+        initialStates[todo.id] = todo.completed;
+      });
+      setTaskStates(initialStates);
+    }
+  }, [activeGroup]);
+
+  const sortedTodos = useMemo(() => {
+    if (!activeGroup) return [];
+    return [...activeGroup.todos].sort((a, b) => {
+      const aCompleted = taskStates[a.id] || a.completed;
+      const bCompleted = taskStates[b.id] || b.completed;
+      if (aCompleted && !bCompleted) return 1;
+      if (!aCompleted && bCompleted) return -1;
+      return 0;
+    });
+  }, [activeGroup, taskStates]);
+
+  const handleAddTaskClick = () => {
+    setAddingTask(true);
+    setNewTaskText("");
+    setTimeout(() => inputRef.current?.focus(), 50);
+  };
+
+  const handleSubmitTask = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (!newTaskText.trim() || !activeGroupId) return;
+    addTodoToGroup(activeGroupId, newTaskText.trim());
+    setNewTaskText("");
+    setAddingTask(false);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      if (newTaskText.trim() && activeGroupId) {
+        addTodoToGroup(activeGroupId, newTaskText.trim());
+        setNewTaskText("");
+        setAddingTask(false);
+      }
+    } else if (e.key === "Escape") {
+      setAddingTask(false);
+      setNewTaskText("");
+    }
+  };
+
+  const handleToggleComplete = (todo: TodoItem) => {
+    const newCompleted = !taskStates[todo.id];
+    setTaskStates(prev => ({ ...prev, [todo.id]: newCompleted }));
+    updateTodo(activeGroupId!, todo.id, { completed: newCompleted });
+  };
+
+  const handleDeleteTask = (todoId: string) => {
+    if (!activeGroupId) return;
+    deleteTodo(activeGroupId, todoId);
+    setTaskStates(prev => {
+      const next = { ...prev };
+      delete next[todoId];
+      return next;
+    });
+  };
+
+  const handleGroupClick = (groupId: string) => {
+    setActiveGroupId(groupId);
+    setAddingTask(false);
+    setNewTaskText("");
+  };
+
   return (
     <div className="page-shell page-shell--centered text-text-primary font-body-main selection:bg-primary-container selection:text-on-primary-container relative overflow-hidden">
       {/* Main Workspace */}
-      <main className="page-main page-main--narrow flex-1 flex flex-col justify-center">
-        {/* Header */}
-        <div className="mb-12 text-center">
-          <div className="caption-copy text-text-muted uppercase tracking-widest mb-4">
-            {getDayName()}
-          </div>
-          <h1 className="page-title text-text-primary">
-            Good morning.
-          </h1>
-        </div>
-
+      <main className="page-main page-main--narrow flex-1 flex flex-col justify-start pt-8">
         {showTodoList ? (
           <>
-            {/* Task List Card */}
-            <div className="surface-card p-6 md:p-8">
-              <div className="space-y-0">
-                {tasks.map((task) => (
-                  <label
-                    key={task.id}
-                    className="list-row task-row cursor-pointer group"
+            {/* Header */}
+            <div className="mb-6 text-center">
+              <div className="caption-copy text-text-muted uppercase tracking-widest mb-2">
+                {getDayName()}
+              </div>
+              <h1 className="page-title text-text-primary">
+                Good morning.
+              </h1>
+            </div>
+
+            {/* Group Tabs */}
+            {todoGroups.length > 0 && (
+              <div className="mb-4 flex items-center justify-center gap-1.5 overflow-x-auto px-2 pb-1 -mx-2">
+                {todoGroups.map((group) => (
+                  <button
+                    key={group.id}
+                    onClick={() => handleGroupClick(group.id)}
+                    className={`group-tab px-3 py-1.5 rounded-full text-sm font-medium transition-all whitespace-nowrap ${
+                      activeGroupId === group.id
+                        ? "bg-primary text-on-primary shadow-sm"
+                        : "bg-surface-container-high text-text-secondary hover:bg-surface-container hover:text-text-primary"
+                    }`}
+                    aria-current={activeGroupId === group.id ? "true" : "false"}
                   >
-                    <div className="relative flex items-center justify-center">
-                      <input
-                        type="checkbox"
-                        className="task-checkbox"
-                        aria-label={task.text}
-                        checked={taskStates[task.id] || false}
-                        onChange={() => toggleTask(task.id)}
-                      />
-                      <span
-                        className={`task-checkmark material-symbols-outlined absolute text-surface-white pointer-events-none transition-opacity ${
-                          taskStates[task.id] ? "opacity-100" : "opacity-0"
-                        }`}
-                        style={{ fontVariationSettings: "'FILL' 1" }}
-                      >
-                        check
-                      </span>
-                    </div>
-                    <div
-                      className={`task-copy body-copy transition-colors ${
-                        taskStates[task.id] ? "text-text-muted line-through" : "text-text-primary group-hover:text-primary"
-                      }`}
-                    >
-                      {task.text}
-                    </div>
-                  </label>
+                    {group.name}
+                    <span className={`ml-1 px-1.5 py-0.5 text-[10px] rounded-full ${
+                      activeGroupId === group.id
+                        ? "bg-primary/20 text-on-primary"
+                        : "bg-surface-container text-text-muted"
+                    }`}>
+                      {group.todos.length}
+                    </span>
+                  </button>
                 ))}
               </div>
+            )}
 
-              {/* Add Task Button */}
-              <div className="pt-6">
-                <button
-                  type="button"
-                  disabled
-                  aria-label="Add task unavailable"
-                  title="Adding tasks is not available yet"
-                  className="button-regular add-task-button control-unavailable font-section-title text-section-title group"
-                >
-                  <span className="material-symbols-outlined text-[18px] group-hover:rotate-90 transition-transform duration-300" style={{ fontVariationSettings: "'FILL' 1" }}>
-                    add
-                  </span>
-                  Add task
-                </button>
+            {/* Task List - Minimal Flat Design */}
+            {activeGroup && (
+              <div className="w-full max-w-2xl mx-auto p-5 bg-[#FFFFFF] rounded-lg shadow-sm border border-border-subtle/50">
+                {/* Task List */}
+                <div className="space-y-0">
+                  {sortedTodos.map((todo, index) => {
+                    const isCompleted = taskStates[todo.id] || todo.completed;
+                    return (
+                      <div
+                        key={todo.id}
+                        className={`flex items-center gap-4 py-5 border-b border-border-subtle/50 last:border-0 ${
+                          isCompleted ? "opacity-50" : ""
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          className="w-6 h-6 accent-primary cursor-pointer flex-shrink-0 rounded-full border-2 border-border-subtle bg-transparent appearance-none transition-colors hover:border-primary/50 focus:outline-none focus:ring-2 focus:ring-primary/20"
+                          aria-label={todo.text}
+                          checked={isCompleted}
+                          onChange={() => handleToggleComplete(todo)}
+                          style={{
+                            WebkitAppearance: 'none',
+                            MozAppearance: 'none',
+                            appearance: 'none',
+                          }}
+                        />
+                        <span
+                          className={`text-body-main transition-colors break-words ${
+                            isCompleted ? "text-text-muted line-through" : "text-text-primary"
+                          }`}
+                          style={{ fontSize: '16px', fontWeight: 400 }}
+                        >
+                          {todo.text}
+                        </span>
+                      </div>
+                    );
+                  })}
+                  {sortedTodos.length === 0 && !addingTask && (
+                    <div className="py-12 text-center text-text-muted">
+                      <p className="text-body-main" style={{ fontSize: '16px', fontWeight: 400 }}>No tasks yet. Add one below.</p>
+                    </div>
+                  )}
+                </div>
+
+                {/* Add Task Form - At Bottom */}
+                {addingTask ? (
+                  <form onSubmit={handleSubmitTask} className="mt-6 pt-6 border-t border-border-subtle/50">
+                    <div className="relative">
+                      <input
+                        ref={inputRef}
+                        type="text"
+                        value={newTaskText}
+                        onChange={(e) => setNewTaskText(e.target.value)}
+                        onKeyDown={handleKeyDown}
+                        onBlur={() => {
+                          if (newTaskText.trim() && activeGroupId) {
+                            addTodoToGroup(activeGroupId, newTaskText.trim());
+                            setNewTaskText("");
+                            setAddingTask(false);
+                          } else setAddingTask(false);
+                        }}
+                        placeholder="What needs to be done?"
+                        className="w-full bg-transparent border-none focus:outline-none font-body-main text-text-primary placeholder:text-text-muted py-3 text-base"
+                        autoFocus
+                        style={{ fontSize: '16px', fontWeight: 400 }}
+                      />
+                      <button
+                        type="submit"
+                        disabled={!newTaskText.trim()}
+                        className="absolute right-0 top-1/2 -translate-y-1/2 p-2 text-text-muted hover:text-primary transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        aria-label="Add task"
+                      >
+                        <span className="material-symbols-outlined text-[22px]" style={{ fontVariationSettings: "'FILL' 1" }}>check</span>
+                      </button>
+                    </div>
+                  </form>
+                ) : (
+                  <button
+                    onClick={handleAddTaskClick}
+                    className="w-full text-left py-3 mt-6 pt-6 border-t border-border-subtle/50 text-text-secondary hover:text-primary transition-colors font-body-main flex items-center gap-3 group"
+                    style={{ fontSize: '16px', fontWeight: 400 }}
+                  >
+                    <span className="material-symbols-outlined text-[22px] group-hover:rotate-90 transition-transform duration-300" style={{ fontVariationSettings: "'FILL' 1" }}>
+                      add
+                    </span>
+                    <span>Add task</span>
+                  </button>
+                )}
               </div>
-            </div>
+            )}
+
+            {!activeGroup && todoGroups.length > 0 && (
+              <div className="w-full max-w-2xl mx-auto px-4 py-12 text-center text-text-muted">
+                <p className="text-body-main" style={{ fontSize: '16px', fontWeight: 400 }}>Select a group to view tasks</p>
+              </div>
+            )}
+
+            {todoGroups.length === 0 && (
+              <div className="w-full max-w-2xl mx-auto px-4 py-12 text-center text-text-muted">
+                <p className="text-body-main" style={{ fontSize: '16px', fontWeight: 400 }}>No groups yet. Create one in Settings → Productivity.</p>
+              </div>
+            )}
           </>
-        ) : null}
+        ) : (
+          <div className="flex flex-col items-center justify-center text-center flex-1">
+            <div className="caption-copy text-text-muted uppercase tracking-widest mb-4">
+              {getDayName()}
+            </div>
+            <h1 className="page-title text-text-primary text-6xl md:text-7xl font-light">
+              Good Morning
+            </h1>
+          </div>
+        )}
       </main>
     </div>
   );

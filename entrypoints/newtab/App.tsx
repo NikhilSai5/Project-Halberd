@@ -10,15 +10,16 @@ import Settings from './pages/Settings/Settings';
 import Calendar from './pages/Calendar/Calendar';
 import HabitTracker from './pages/HabitTracker/HabitTracker';
 import Navbar from '@/components/Navbar';
+import { SettingsProvider, useSettings } from '@/lib/SettingsContext';
 import './style.css';
 
 type Page = "home" | "pomodoro" | "weekly-goal" | "focus" | "tools" | "settings" | "calendar" | "habit-tracker";
 type NavbarPosition = "bottom-center" | "left" | "right";
 
-function App() {
+function AppContent() {
+  const { showTodoListInHome } = useSettings();
   const [currentPage, setCurrentPage] = useState<Page>("home");
   const [focusTrigger, setFocusTrigger] = useState<"center_focus_strong" | "analytics">("analytics");
-  const [showTodoListInHome, setShowTodoListInHome] = useState(true);
   const [navbarPosition, setNavbarPosition] = useState<NavbarPosition>("bottom-center");
 
   const handleNavClick = (icon: string) => {
@@ -68,4 +69,10 @@ function App() {
   );
 }
 
-export default App;
+export default function App() {
+  return (
+    <SettingsProvider>
+      <AppContent />
+    </SettingsProvider>
+  );
+}
