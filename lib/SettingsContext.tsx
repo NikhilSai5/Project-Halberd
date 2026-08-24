@@ -12,7 +12,18 @@ import {
   getSlideshowImages,
   setSlideshowImagesInDB,
   clearSlideshowImagesFromDB,
+  getProductiveSessions,
+  addProductiveSessionToDB,
+  updateProductiveSessionInDB,
+  removeProductiveSessionFromDB,
+  clearProductiveSessionsFromDB,
 } from '@/lib/db';
+import {
+  DEFAULT_AUTO_TRACKING_CONFIG,
+  type AutoTrackingConfig,
+  type ProductiveSession,
+  type WeeklyGoal as SharedWeeklyGoal,
+} from '@/lib/weeklyGoalTypes';
 
 export interface TodoItem {
   id: string;
@@ -46,15 +57,8 @@ export interface SlideshowSettings {
   images: string[];
 }
 
-export interface WeeklyGoal {
-  id: string;
-  name: string;
-  targetHours: number;
-  startDate: string;
-  endDate: string;
-  sessions: { timeRange: string; description: string }[];
-  completed: boolean;
-}
+export type { AutoTrackingConfig, ProductiveSession } from '@/lib/weeklyGoalTypes';
+export type WeeklyGoal = SharedWeeklyGoal;
 
 interface SettingsContextType {
   showTodoListInHome: boolean;
@@ -98,6 +102,12 @@ interface SettingsContextType {
   updateWeeklyGoal: (goalId: string, updates: Partial<WeeklyGoal>) => void;
   deleteWeeklyGoal: (goalId: string) => void;
   toggleWeeklyGoalComplete: (goalId: string) => void;
+  productiveSessions: ProductiveSession[];
+  refreshProductiveSessions: (weeklyGoalId?: string) => Promise<void>;
+  addProductiveSession: (session: ProductiveSession) => Promise<void>;
+  updateProductiveSession: (id: string, updates: Partial<Omit<ProductiveSession, "id">>) => Promise<void>;
+  deleteProductiveSession: (id: string) => Promise<void>;
+  clearProductiveSessions: (weeklyGoalId?: string) => Promise<void>;
 }
 
 const SettingsContext = createContext<SettingsContextType | undefined>(undefined);
@@ -162,6 +172,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     images: [],
   });
   const [weeklyGoals, setWeeklyGoals] = useState<WeeklyGoal[]>([]);
+  const [productiveSessions, setProductiveSessions] = useState<ProductiveSession[]>([]);
 
   const setSlideshowSettings = (settings: Partial<SlideshowSettings> | ((prev: SlideshowSettings) => SlideshowSettings)) => {
     setSlideshowSettingsState(prev => 
@@ -352,6 +363,8 @@ useEffect(() => {
       }
     }).catch(() => {});
 
+    getProductiveSessions().then(setProductiveSessions).catch(() => {});
+
     setInitialized(true);
   }, []);
 
@@ -532,6 +545,7 @@ useEffect(() => {
   const addWeeklyGoal = (goal: Omit<WeeklyGoal, "id">) => {
     const newGoal: WeeklyGoal = {
       ...goal,
+      autoTracking: goal.autoTracking ?? { ...DEFAULT_AUTO_TRACKING_CONFIG },
       id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
     };
     setWeeklyGoals((prev) => [...prev, newGoal]);
@@ -552,6 +566,43 @@ useEffect(() => {
   const toggleWeeklyGoalComplete = (goalId: string) => {
     setWeeklyGoals((prev) =>
       prev.map((g) => (g.id === goalId ? { ...g, completed: !g.completed } : g))
+    );
+  };
+
+  const refreshProductiveSessions = async (weeklyGoalId?: string) => {
+    const sessions = await getProductiveSessions(weeklyGoalId ? { weeklyGoalId } : undefined);
+    setProductiveSessions((current) => weeklyGoalId
+      ? [...current.filter((session) => session.weeklyGoalId !== weeklyGoalId), ...sessions]
+          .sort((a, b) => b.startTime - a.startTime)
+      : sessions
+    );
+  };
+
+  const addProductiveSession = async (session: ProductiveSession) => {
+    await addProductiveSessionToDB(session);
+    setProductiveSessions((prev) => [session, ...prev.filter((item) => item.id !== session.id)]);
+  };
+
+  const updateProductiveSession = async (
+    id: string,
+    updates: Partial<Omit<ProductiveSession, "id">>,
+  ) => {
+    await updateProductiveSessionInDB(id, updates);
+    setProductiveSessions((prev) => prev.map((session) =>
+      session.id === id ? { ...session, ...updates } : session
+    ));
+  };
+
+  const deleteProductiveSession = async (id: string) => {
+    await removeProductiveSessionFromDB(id);
+    setProductiveSessions((prev) => prev.filter((session) => session.id !== id));
+  };
+
+  const clearProductiveSessions = async (weeklyGoalId?: string) => {
+    await clearProductiveSessionsFromDB(weeklyGoalId);
+    setProductiveSessions((prev) => weeklyGoalId
+      ? prev.filter((session) => session.weeklyGoalId !== weeklyGoalId)
+      : []
     );
   };
 
@@ -598,7 +649,13 @@ useEffect(() => {
         addWeeklyGoal,
         updateWeeklyGoal,
         deleteWeeklyGoal,
-        toggleWeeklyGoalComplete,
+         toggleWeeklyGoalComplete,
+         productiveSessions,
+         refreshProductiveSessions,
+         addProductiveSession,
+         updateProductiveSession,
+         deleteProductiveSession,
+         clearProductiveSessions,
       }}
     >
       {children}
