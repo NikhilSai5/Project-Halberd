@@ -10,6 +10,12 @@ interface WeeklyGoal {
   completed: boolean;
 }
 
+export interface SlideshowImage {
+  id: string;
+  name: string;
+  data: string;
+}
+
 interface HalberdDB extends DBSchema {
   items: {
     key: string;
@@ -23,6 +29,10 @@ interface HalberdDB extends DBSchema {
     key: string;
     value: WeeklyGoal;
   };
+  slideshowImages: {
+    key: string;
+    value: SlideshowImage;
+  };
 }
 
 let dbInstance: IDBPDatabase<HalberdDB> | null = null;
@@ -30,7 +40,7 @@ let dbInstance: IDBPDatabase<HalberdDB> | null = null;
 export async function getDB(): Promise<IDBPDatabase<HalberdDB>> {
   if (dbInstance) return dbInstance;
 
-  dbInstance = await openDB<HalberdDB>('halberd-db', 3, {
+  dbInstance = await openDB<HalberdDB>('halberd-db', 4, {
     upgrade(db, oldVersion) {
       if (!db.objectStoreNames.contains('items')) {
         db.createObjectStore('items', { keyPath: 'id' });
@@ -40,6 +50,9 @@ export async function getDB(): Promise<IDBPDatabase<HalberdDB>> {
       }
       if (!db.objectStoreNames.contains('weeklyGoals')) {
         db.createObjectStore('weeklyGoals', { keyPath: 'id' });
+      }
+      if (!db.objectStoreNames.contains('slideshowImages')) {
+        db.createObjectStore('slideshowImages', { keyPath: 'id' });
       }
     },
   });
@@ -92,4 +105,24 @@ export async function removeWeeklyGoalFromDB(id: string): Promise<void> {
 export async function clearAllWeeklyGoalsFromDB(): Promise<void> {
   const db = await getDB();
   await db.clear('weeklyGoals');
+}
+
+export async function getSlideshowImages(): Promise<SlideshowImage[]> {
+  const db = await getDB();
+  return db.getAll('slideshowImages');
+}
+
+export async function setSlideshowImagesInDB(images: SlideshowImage[]): Promise<void> {
+  const db = await getDB();
+  const tx = db.transaction('slideshowImages', 'readwrite');
+  await tx.store.clear();
+  for (const image of images) {
+    await tx.store.put(image);
+  }
+  await tx.done;
+}
+
+export async function clearSlideshowImagesFromDB(): Promise<void> {
+  const db = await getDB();
+  await db.clear('slideshowImages');
 }

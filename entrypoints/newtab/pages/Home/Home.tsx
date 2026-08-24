@@ -1038,6 +1038,7 @@ export default function Home({
     addTodoToGroup,
     updateTodo,
     deleteTodo,
+    showCompletedTasks,
   } = useSettings();
 
   const [activeGroupId, setActiveGroupId] =
@@ -1054,6 +1055,21 @@ export default function Home({
 
   const [expandedGroupId, setExpandedGroupId] =
     useState<string | null>(null);
+
+  /*
+   * ================================================================
+   * TASK EDITING
+   * ================================================================
+   *
+   * Only one task can be edited at a time, across both the normal
+   * todo list and the expanded todo list.
+   */
+
+  const [editingTodoId, setEditingTodoId] =
+    useState<string | null>(null);
+
+  const [editingText, setEditingText] =
+    useState("");
 
   /*
    * ================================================================
@@ -1449,8 +1465,8 @@ export default function Home({
       return [];
     }
 
-    return [...activeGroup.todos].sort(
-      (a, b) => {
+    return [...activeGroup.todos]
+      .sort((a, b) => {
         const aCompleted =
           taskStates[a.id] ||
           a.completed;
@@ -1474,11 +1490,19 @@ export default function Home({
         }
 
         return 0;
-      }
-    );
+      })
+      .filter(
+        (todo) =>
+          showCompletedTasks ||
+          !(
+            taskStates[todo.id] ||
+            todo.completed
+          )
+      );
   }, [
     activeGroup,
     taskStates,
+    showCompletedTasks,
   ]);
 
   const expandedGroup =
@@ -1495,34 +1519,44 @@ export default function Home({
 
       return [
         ...expandedGroup.todos,
-      ].sort((a, b) => {
-        const aCompleted =
-          taskStates[a.id] ||
-          a.completed;
+      ]
+        .sort((a, b) => {
+          const aCompleted =
+            taskStates[a.id] ||
+            a.completed;
 
-        const bCompleted =
-          taskStates[b.id] ||
-          b.completed;
+          const bCompleted =
+            taskStates[b.id] ||
+            b.completed;
 
-        if (
-          aCompleted &&
-          !bCompleted
-        ) {
-          return 1;
-        }
+          if (
+            aCompleted &&
+            !bCompleted
+          ) {
+            return 1;
+          }
 
-        if (
-          !aCompleted &&
-          bCompleted
-        ) {
-          return -1;
-        }
+          if (
+            !aCompleted &&
+            bCompleted
+          ) {
+            return -1;
+          }
 
-        return 0;
-      });
+          return 0;
+        })
+        .filter(
+          (todo) =>
+            showCompletedTasks ||
+            !(
+              taskStates[todo.id] ||
+              todo.completed
+            )
+        );
     }, [
       expandedGroup,
       taskStates,
+      showCompletedTasks,
     ]);
 
   /*
@@ -1592,6 +1626,7 @@ export default function Home({
   };
 
   const handleToggleComplete = (
+    groupId: string,
     todo: TodoItem
   ) => {
     const newCompleted =
@@ -1604,7 +1639,7 @@ export default function Home({
     }));
 
     updateTodo(
-      activeGroupId!,
+      groupId,
       todo.id,
       {
         completed:
@@ -1614,16 +1649,21 @@ export default function Home({
   };
 
   const handleDeleteTask = (
+    groupId: string,
     todoId: string
   ) => {
-    if (!activeGroupId) {
+    if (!groupId) {
       return;
     }
 
     deleteTodo(
-      activeGroupId,
+      groupId,
       todoId
     );
+
+    if (editingTodoId === todoId) {
+      handleCancelEdit();
+    }
 
     setTaskStates((prev) => {
       const next = {
@@ -1634,6 +1674,48 @@ export default function Home({
 
       return next;
     });
+  };
+
+  /*
+   * ================================================================
+   * TASK EDIT HANDLERS
+   * ================================================================
+   */
+
+  const handleEditClick = (
+    todo: TodoItem
+  ) => {
+    setEditingTodoId(todo.id);
+    setEditingText(todo.text);
+  };
+
+  const handleCancelEdit = () => {
+    setEditingTodoId(null);
+    setEditingText("");
+  };
+
+  const handleSaveEdit = (
+    groupId: string
+  ) => {
+    const nextText =
+      editingText.trim();
+
+    /*
+     * An empty text cancels the edit instead of
+     * wiping the task.
+     */
+    if (editingTodoId && nextText) {
+      updateTodo(
+        groupId,
+        editingTodoId,
+        {
+          text: nextText,
+        }
+      );
+    }
+
+    setEditingTodoId(null);
+    setEditingText("");
   };
 
   const handleGroupClick = (
@@ -1655,6 +1737,220 @@ export default function Home({
         !taskStates[todo.id] &&
         !todo.completed
     ).length;
+  };
+
+  /*
+   * Stop editing when the visible group changes so the
+   * inline editor never appears on the wrong list.
+   */
+  useEffect(() => {
+    handleCancelEdit();
+  }, [activeGroupId, expandedGroupId]);
+
+  /*
+   * ================================================================
+   * TASK ROW
+   * ================================================================
+   *
+   * Shared renderer for both the normal todo list and the expanded
+   * todo list so editing behaves identically in both places.
+   */
+
+  const renderTaskRow = (
+    todo: TodoItem,
+    groupId: string
+  ) => {
+    const isCompleted =
+      taskStates[todo.id] ||
+      todo.completed;
+
+    const isEditing =
+      editingTodoId === todo.id;
+
+    if (isEditing) {
+      return (
+        <div
+          key={todo.id}
+          className="flex items-center gap-4 py-3 border-b border-border-subtle bg-surface-secondary transition-colors -mx-6 px-6 md:-mx-8 md:px-8"
+        >
+
+          <span
+            className="material-symbols-outlined text-[18px] text-primary"
+            style={{
+              fontVariationSettings:
+                "'FILL' 1",
+            }}
+            aria-hidden="true"
+          >
+            edit
+          </span>
+
+          <input
+            type="text"
+            value={editingText}
+            onChange={(e) =>
+              setEditingText(e.target.value)
+            }
+            onKeyDown={(e) => {
+              if (
+                e.key === "Enter" &&
+                !e.shiftKey
+              ) {
+                e.preventDefault();
+                handleSaveEdit(groupId);
+              } else if (
+                e.key === "Escape"
+              ) {
+                e.preventDefault();
+                handleCancelEdit();
+              }
+            }}
+            onBlur={() =>
+              handleSaveEdit(groupId)
+            }
+            className="flex-1 min-w-0 bg-transparent border-none focus:outline-none font-body-main text-body-main text-text-primary py-1"
+            aria-label="Edit task"
+            autoFocus
+          />
+
+          <button
+            onClick={() =>
+              handleSaveEdit(groupId)
+            }
+            onMouseDown={(e) =>
+              e.preventDefault()
+            }
+            className="text-primary transition-colors p-1 rounded-full focus:outline-none"
+            aria-label="Save task"
+          >
+            <span
+              className="material-symbols-outlined text-[16px]"
+              style={{
+                fontVariationSettings:
+                  "'FILL' 1",
+              }}
+              aria-hidden="true"
+            >
+              check
+            </span>
+          </button>
+
+          <button
+            onClick={() =>
+              handleCancelEdit()
+            }
+            onMouseDown={(e) =>
+              e.preventDefault()
+            }
+            className="text-text-muted hover:text-error transition-colors p-1 rounded-full focus:outline-none"
+            aria-label="Cancel editing"
+          >
+            <span
+              className="material-symbols-outlined text-[16px]"
+              aria-hidden="true"
+            >
+              close
+            </span>
+          </button>
+
+        </div>
+      );
+    }
+
+    return (
+      <label
+        key={todo.id}
+        className="flex items-center gap-4 py-3 border-b border-border-subtle cursor-pointer group hover:bg-surface-secondary transition-colors -mx-6 px-6 md:-mx-8 md:px-8"
+      >
+
+        <div className="relative flex items-center justify-center">
+
+          <input
+            type="checkbox"
+            className="task-checkbox appearance-none w-5 h-5 border border-outline rounded-full checked:bg-primary checked:border-primary transition-colors cursor-pointer focus:ring-0 focus:ring-offset-0"
+            aria-label={
+              todo.text
+            }
+            checked={
+              isCompleted
+            }
+            onChange={() =>
+              handleToggleComplete(
+                groupId,
+                todo
+              )
+            }
+          />
+
+          <span
+            className="material-symbols-outlined absolute text-[14px] text-surface-white pointer-events-none opacity-0 transition-opacity peer-checked:opacity-100"
+            style={{
+              fontVariationSettings:
+                "'FILL' 1",
+            }}
+          >
+            check
+          </span>
+
+        </div>
+
+        <span
+          className={`font-body-main text-body-main text-text-primary group-hover:text-primary transition-colors flex-1 text-left ${
+            isCompleted
+              ? "text-text-muted line-through"
+              : ""
+          }`}
+        >
+          {
+            todo.text
+          }
+        </span>
+
+        <button
+          onClick={(
+            e
+          ) => {
+            e.preventDefault();
+            e.stopPropagation();
+
+            handleEditClick(todo);
+          }}
+          className="text-text-muted hover:text-primary transition-colors p-1 rounded-full opacity-0 group-hover:opacity-100 focus:opacity-100 focus:outline-none"
+          aria-label="Edit task"
+        >
+          <span
+            className="material-symbols-outlined text-[16px]"
+            aria-hidden="true"
+          >
+            edit
+          </span>
+        </button>
+
+        <button
+          onClick={(
+            e
+          ) => {
+            e.preventDefault();
+            e.stopPropagation();
+
+            handleDeleteTask(
+              groupId,
+              todo.id
+            );
+          }}
+          className="text-text-muted hover:text-error transition-colors p-1 rounded-full opacity-0 group-hover:opacity-100 focus:opacity-100 focus:outline-none"
+          aria-label="Delete task"
+        >
+          <span
+            className="material-symbols-outlined text-[16px]"
+            aria-hidden="true"
+          >
+            close
+          </span>
+        </button>
+
+      </label>
+    );
   };
 
   /*
@@ -1743,89 +2039,8 @@ export default function Home({
 
                 <div className="space-y-0 max-h-[192px] overflow-y-auto overflow-x-hidden pr-1 scrollbar-hide">
 
-                  {sortedTodos.map(
-                    (todo) => {
-                      const isCompleted =
-                        taskStates[
-                          todo.id
-                        ] ||
-                        todo.completed;
-
-                      return (
-                        <label
-                          key={
-                            todo.id
-                          }
-                          className="flex items-center gap-4 py-3 border-b border-border-subtle cursor-pointer group hover:bg-surface-secondary transition-colors -mx-6 px-6 md:-mx-8 md:px-8"
-                        >
-
-                          <div className="relative flex items-center justify-center">
-
-                            <input
-                              type="checkbox"
-                              className="task-checkbox appearance-none w-5 h-5 border border-outline rounded-full checked:bg-primary checked:border-primary transition-colors cursor-pointer focus:ring-0 focus:ring-offset-0"
-                              aria-label={
-                                todo.text
-                              }
-                              checked={
-                                isCompleted
-                              }
-                              onChange={() =>
-                                handleToggleComplete(
-                                  todo
-                                )
-                              }
-                            />
-
-                            <span
-                              className="material-symbols-outlined absolute text-[14px] text-surface-white pointer-events-none opacity-0 transition-opacity peer-checked:opacity-100"
-                              style={{
-                                fontVariationSettings:
-                                  "'FILL' 1",
-                              }}
-                            >
-                              check
-                            </span>
-
-                          </div>
-
-                          <span
-                            className={`font-body-main text-body-main text-text-primary group-hover:text-primary transition-colors flex-1 text-left ${
-                              isCompleted
-                                ? "text-text-muted line-through"
-                                : ""
-                            }`}
-                          >
-                            {
-                              todo.text
-                            }
-                          </span>
-
-                          <button
-                            onClick={(
-                              e
-                            ) => {
-                              e.preventDefault();
-                              e.stopPropagation();
-
-                              handleDeleteTask(
-                                todo.id
-                              );
-                            }}
-                            className="text-text-muted hover:text-error transition-colors p-1 rounded-full opacity-0 group-hover:opacity-100 focus:opacity-100 focus:outline-none"
-                            aria-label="Delete task"
-                          >
-                            <span
-                              className="material-symbols-outlined text-[16px]"
-                              aria-hidden="true"
-                            >
-                              close
-                            </span>
-                          </button>
-
-                        </label>
-                      );
-                    }
+                  {sortedTodos.map((todo) =>
+                    renderTaskRow(todo, activeGroupId!)
                   )}
 
                   {sortedTodos.length ===
@@ -2124,89 +2339,8 @@ export default function Home({
 
                   <div className="space-y-0 max-h-[192px] overflow-y-auto overflow-x-hidden pr-1 scrollbar-hide">
 
-                    {sortedExpandedTodos.map(
-                      (todo) => {
-                        const isCompleted =
-                          taskStates[
-                            todo.id
-                          ] ||
-                          todo.completed;
-
-                        return (
-                          <label
-                            key={
-                              todo.id
-                            }
-                            className="flex items-center gap-4 py-3 border-b border-border-subtle cursor-pointer group hover:bg-surface-secondary transition-colors -mx-6 px-6 md:-mx-8 md:px-8"
-                          >
-
-                            <div className="relative flex items-center justify-center">
-
-                              <input
-                                type="checkbox"
-                                className="task-checkbox appearance-none w-5 h-5 border border-outline rounded-full checked:bg-primary checked:border-primary transition-colors cursor-pointer focus:ring-0 focus:ring-offset-0"
-                                aria-label={
-                                  todo.text
-                                }
-                                checked={
-                                  isCompleted
-                                }
-                                onChange={() =>
-                                  handleToggleComplete(
-                                    todo
-                                  )
-                                }
-                              />
-
-                              <span
-                                className="material-symbols-outlined absolute text-[14px] text-surface-white pointer-events-none opacity-0 transition-opacity peer-checked:opacity-100"
-                                style={{
-                                  fontVariationSettings:
-                                    "'FILL' 1",
-                                }}
-                              >
-                                check
-                              </span>
-
-                            </div>
-
-                            <span
-                              className={`font-body-main text-body-main text-text-primary group-hover:text-primary transition-colors flex-1 text-left ${
-                                isCompleted
-                                  ? "text-text-muted line-through"
-                                  : ""
-                              }`}
-                            >
-                              {
-                                todo.text
-                              }
-                            </span>
-
-                            <button
-                              onClick={(
-                                e
-                              ) => {
-                                e.preventDefault();
-                                e.stopPropagation();
-
-                                handleDeleteTask(
-                                  todo.id
-                                );
-                              }}
-                              className="text-text-muted hover:text-error transition-colors p-1 rounded-full opacity-0 group-hover:opacity-100 focus:opacity-100 focus:outline-none"
-                              aria-label="Delete task"
-                            >
-                              <span
-                                className="material-symbols-outlined text-[16px]"
-                                aria-hidden="true"
-                              >
-                                close
-                              </span>
-                            </button>
-
-                          </label>
-                        );
-                      }
+                    {sortedExpandedTodos.map((todo) =>
+                      renderTaskRow(todo, expandedGroupId!)
                     )}
 
                   </div>

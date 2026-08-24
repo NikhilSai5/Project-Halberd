@@ -1,7 +1,18 @@
 "use client";
 
 import { createContext, useContext, useState, useEffect, type ReactNode } from "react";
-import { getWallpapers, addWallpaperToDB, removeWallpaperFromDB, clearAllWallpapersFromDB, getWeeklyGoals, addWeeklyGoalToDB, removeWeeklyGoalFromDB } from '@/lib/db';
+import {
+  getWallpapers,
+  addWallpaperToDB,
+  removeWallpaperFromDB,
+  clearAllWallpapersFromDB,
+  getWeeklyGoals,
+  addWeeklyGoalToDB,
+  removeWeeklyGoalFromDB,
+  getSlideshowImages,
+  setSlideshowImagesInDB,
+  clearSlideshowImagesFromDB,
+} from '@/lib/db';
 
 export interface TodoItem {
   id: string;
@@ -31,6 +42,7 @@ export interface WallpaperFile {
 export interface SlideshowSettings {
   enabled: boolean;
   interval: string;
+  folderName: string | null;
   images: string[];
 }
 
@@ -47,6 +59,8 @@ export interface WeeklyGoal {
 interface SettingsContextType {
   showTodoListInHome: boolean;
   setShowTodoListInHome: (value: boolean) => void;
+  showCompletedTasks: boolean;
+  setShowCompletedTasks: (value: boolean) => void;
   todoGroups: TodoGroup[];
   setTodoGroups: (groups: TodoGroup[]) => void;
   addTodoGroup: (name?: string) => void;
@@ -73,6 +87,8 @@ interface SettingsContextType {
   setWallpaperDarkness: (value: number) => void;
   slideshowSettings: SlideshowSettings;
   setSlideshowSettings: (settings: Partial<SlideshowSettings> | ((prev: SlideshowSettings) => SlideshowSettings)) => void;
+  setSlideshowFolder: (folderName: string, images: { name: string; data: string }[]) => void;
+  clearSlideshowFolder: () => void;
   weeklyGoals: WeeklyGoal[];
   setWeeklyGoals: (goals: WeeklyGoal[]) => void;
   addWeeklyGoal: (goal: Omit<WeeklyGoal, "id">) => void;
@@ -129,6 +145,7 @@ const DEFAULT_HABITS: Habit[] = [
 
 export function SettingsProvider({ children }: { children: ReactNode }) {
   const [showTodoListInHome, setShowTodoListInHome] = useState(true);
+  const [showCompletedTasks, setShowCompletedTasks] = useState(true);
   const [todoGroups, setTodoGroups] = useState<TodoGroup[]>(DEFAULT_GROUPS);
   const [habits, setHabits] = useState<Habit[]>(DEFAULT_HABITS);
   const [wallpapers, setWallpapers] = useState<WallpaperFile[]>([]);
@@ -138,6 +155,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   const [slideshowSettings, setSlideshowSettingsState] = useState<SlideshowSettings>({
     enabled: false,
     interval: "30min",
+    folderName: null,
     images: [],
   });
   const [weeklyGoals, setWeeklyGoals] = useState<WeeklyGoal[]>([]);
@@ -148,12 +166,52 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     );
   };
 
+  /*
+   * Slideshow folder images are kept completely separate from the
+   * normal wallpapers: they live in their own IndexedDB store and
+   * only replace the whole folder at once.
+   */
+  const setSlideshowFolder = (folderName: string, images: { name: string; data: string }[]) => {
+    setSlideshowSettingsState(prev => ({
+      ...prev,
+      folderName,
+      images: images.map((image) => image.data),
+    }));
+
+    setSlideshowImagesInDB(
+      images.map((image, index) => ({
+        id: `${index}-${image.name}`,
+        name: image.name,
+        data: image.data,
+      }))
+    ).catch(() => {});
+  };
+
+  const clearSlideshowFolder = () => {
+    setSlideshowSettingsState(prev => ({
+      ...prev,
+      folderName: null,
+      images: [],
+    }));
+
+    clearSlideshowImagesFromDB().catch(() => {});
+  };
+
   const [initialized, setInitialized] = useState(false);
 
   useEffect(() => {
     const storedShowTodo = localStorage.getItem("showTodoListInHome");
     if (storedShowTodo !== null) {
       setShowTodoListInHome(JSON.parse(storedShowTodo));
+    }
+
+    const storedShowCompleted = localStorage.getItem("showCompletedTasks");
+    if (storedShowCompleted !== null) {
+      try {
+        setShowCompletedTasks(JSON.parse(storedShowCompleted));
+      } catch {
+        // ignore parse errors
+      }
     }
 
     const storedGroups = localStorage.getItem("todoGroups");
@@ -271,6 +329,16 @@ useEffect(() => {
       }
     }).catch(() => {});
 
+    // Load slideshow folder images from IndexedDB
+    getSlideshowImages().then((images) => {
+      if (images.length > 0) {
+        setSlideshowSettingsState(prev => ({
+          ...prev,
+          images: images.map((image) => image.data),
+        }));
+      }
+    }).catch(() => {});
+
     setInitialized(true);
   }, []);
 
@@ -278,6 +346,11 @@ useEffect(() => {
     if (!initialized) return;
     localStorage.setItem("showTodoListInHome", JSON.stringify(showTodoListInHome));
   }, [showTodoListInHome, initialized]);
+
+  useEffect(() => {
+    if (!initialized) return;
+    localStorage.setItem("showCompletedTasks", JSON.stringify(showCompletedTasks));
+  }, [showCompletedTasks, initialized]);
 
   useEffect(() => {
     if (!initialized) return;
@@ -313,7 +386,16 @@ useEffect(() => {
 
   useEffect(() => {
     if (!initialized) return;
-    localStorage.setItem("slideshowSettings", JSON.stringify(slideshowSettings));
+    /*
+     * Image data lives in IndexedDB (too large for localStorage),
+     * so only the lightweight settings are persisted here.
+     */
+    const persistedSlideshowSettings = {
+      enabled: slideshowSettings.enabled,
+      interval: slideshowSettings.interval,
+      folderName: slideshowSettings.folderName,
+    };
+    localStorage.setItem("slideshowSettings", JSON.stringify(persistedSlideshowSettings));
   }, [slideshowSettings, initialized]);
 
   useEffect(() => {
@@ -465,6 +547,8 @@ useEffect(() => {
       value={{
         showTodoListInHome,
         setShowTodoListInHome,
+        showCompletedTasks,
+        setShowCompletedTasks,
         todoGroups,
         setTodoGroups,
         addTodoGroup,
@@ -491,6 +575,8 @@ useEffect(() => {
         setWallpaperDarkness,
         slideshowSettings,
         setSlideshowSettings,
+        setSlideshowFolder,
+        clearSlideshowFolder,
         weeklyGoals,
         setWeeklyGoals,
         addWeeklyGoal,

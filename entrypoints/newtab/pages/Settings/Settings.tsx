@@ -54,6 +54,8 @@ export default function Settings() {
     setWallpaperDarkness,
     slideshowSettings,
     setSlideshowSettings,
+    setSlideshowFolder,
+    clearSlideshowFolder,
     todoGroups, 
     addTodoGroup, 
     updateTodoGroupName, 
@@ -61,8 +63,10 @@ export default function Settings() {
     addTodoToGroup, 
     updateTodo, 
     deleteTodo,
-    showTodoListInHome, 
+    showTodoListInHome,
     setShowTodoListInHome,
+    showCompletedTasks,
+    setShowCompletedTasks,
     weeklyGoals,
     setWeeklyGoals,
     addWeeklyGoal,
@@ -75,11 +79,23 @@ export default function Settings() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const folderInputRef = useRef<HTMLInputElement>(null);
 
+  /*
+   * React does not render the boolean webkitdirectory prop as a DOM
+   * attribute, which makes the picker open in normal file mode. Set
+   * the attributes directly so the OS dialog allows picking folders.
+   */
+  useEffect(() => {
+    const folderInput = folderInputRef.current;
+    if (folderInput) {
+      folderInput.setAttribute("webkitdirectory", "");
+      folderInput.setAttribute("directory", "");
+    }
+  }, []);
+
   // Layout state
   const [navbarLocation, setNavbarLocation] = useState<"bottom-center" | "left" | "right">("bottom-center");
 
   // Productivity state
-  const [showCompletedTasks, setShowCompletedTasks] = useState(true);
   const [expandedGroupIds, setExpandedGroupIds] = useState<Set<string>>(new Set());
 
   const toggleGroupExpand = (groupId: string) => {
@@ -137,7 +153,7 @@ export default function Settings() {
   // Handle folder selection for slideshow
   const handleFolderSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
-    if (!files) return;
+    if (!files || files.length === 0) return;
 
     const imageFiles = Array.from(files).filter(file => file.type.startsWith("image/"));
     if (imageFiles.length === 0) {
@@ -145,29 +161,27 @@ export default function Settings() {
       return;
     }
 
-    const readPromises = imageFiles.map(file => new Promise<string>((resolve, reject) => {
+    // Folder name comes from the shared root of the selected paths
+    const firstPath = imageFiles[0]?.webkitRelativePath || "";
+    const folderName = firstPath.split("/")[0] || "Selected Folder";
+
+    const readPromises = imageFiles.map(file => new Promise<{ name: string; data: string }>((resolve, reject) => {
       const reader = new FileReader();
       reader.onload = (event) => {
-        const result = event.target?.result as string;
-        const newWallpaper: WallpaperFile = {
-          id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-          name: file.name,
-          preview: result,
-        };
-        addWallpaper(newWallpaper);
-        resolve(result);
+        const result = event.target?.result;
+        if (typeof result === "string") {
+          resolve({ name: file.name, data: result });
+        } else {
+          reject(new Error(`Failed to read ${file.name}`));
+        }
       };
       reader.onerror = () => reject(reader.error);
       reader.readAsDataURL(file);
     }));
 
-    Promise.all(readPromises).then(newImages => {
-      if (newImages.length > 0) {
-        setSlideshowSettings(prev => ({
-          ...prev,
-          images: [...prev.images, ...newImages],
-        }));
-      }
+    Promise.all(readPromises).then((images) => {
+      // Slideshow images stay separate from normal wallpapers
+      setSlideshowFolder(folderName, images);
     }).catch(err => console.error("Failed to read folder images:", err));
 
     // Reset input value
@@ -520,7 +534,7 @@ export default function Settings() {
                         <div className="flex items-center justify-between">
                           <div>
                             <div className="font-body-main text-body-main text-on-surface">Enable Slideshow</div>
-                            <div className="label-copy text-text-secondary">Automatically rotate through uploaded wallpapers</div>
+                            <div className="label-copy text-text-secondary">Automatically rotate through your selected folder</div>
                           </div>
                           <button
                             role="switch"
@@ -567,32 +581,56 @@ export default function Settings() {
                                 <input
                                   ref={folderInputRef}
                                   type="file"
-                                  accept="image/*"
-                                  {...{ webkitdirectory: true, directory: true }}
                                   multiple
                                   onChange={handleFolderSelect}
                                   className="sr-only"
                                   aria-label="Select folder for slideshow"
                                 />
-                                <button
-                                  type="button"
-                                  onClick={() => folderInputRef.current?.click()}
-                                  className="button-regular button-regular--outlined font-section-title text-section-title group w-full justify-start"
-                                >
-                                  <span className="material-symbols-outlined text-[18px]">folder_open</span>
-                                  Select Folder for Slideshow
-                                </button>
-                                <div className="label-copy text-text-muted">Select a folder containing images for the slideshow</div>
+                                {slideshowSettings.folderName ? (
+                                  <div className="flex items-center justify-between gap-3 bg-surface-container-low border border-border-subtle rounded-lg px-3 py-2">
+                                    <div className="flex items-center gap-2 min-w-0">
+                                      <span className="material-symbols-outlined text-[20px] text-primary" aria-hidden="true">folder_open</span>
+                                      <div className="min-w-0">
+                                        <div className="font-body-main text-body-main text-on-surface truncate">
+                                          {slideshowSettings.folderName}
+                                        </div>
+                                        <div className="label-copy text-text-secondary">
+                                          {slideshowSettings.images.length} image{slideshowSettings.images.length !== 1 ? "s" : ""} found
+                                        </div>
+                                      </div>
+                                    </div>
+                                    <button
+                                      type="button"
+                                      onClick={clearSlideshowFolder}
+                                      className="text-text-muted hover:text-error transition-colors p-1 rounded-full shrink-0"
+                                      aria-label="Remove slideshow folder"
+                                    >
+                                      <span className="material-symbols-outlined text-[18px]" aria-hidden="true">close</span>
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <>
+                                    <button
+                                      type="button"
+                                      onClick={() => folderInputRef.current?.click()}
+                                      className="button-regular button-regular--outlined font-section-title text-section-title group w-full justify-start"
+                                    >
+                                      <span className="material-symbols-outlined text-[18px]">folder_open</span>
+                                      Select Folder for Slideshow
+                                    </button>
+                                    <div className="label-copy text-text-muted">Select a folder containing images for the slideshow</div>
+                                  </>
+                                )}
                               </div>
                             </div>
 
-                            {wallpapers.length === 0 && slideshowSettings.images.length === 0 && (
+                            {slideshowSettings.enabled && !slideshowSettings.folderName && (
                               <div className="settings-info-banner bg-warning-container/20 border border-warning-container/30 rounded-lg p-4">
                                 <div className="flex items-start gap-3">
                                   <span className="material-symbols-outlined text-warning text-[20px] mt-0.5" aria-hidden="true">warning</span>
                                   <div className="flex-1">
-                                    <div className="font-body-main text-body-main text-on-surface">No Images for Slideshow</div>
-                                    <div className="label-copy text-text-secondary mt-1">Add images above or select a folder to use the slideshow feature.</div>
+                                    <div className="font-body-main text-body-main text-on-surface">No Folder Selected</div>
+                                    <div className="label-copy text-text-secondary mt-1">Select a folder to use the slideshow feature. Your normal wallpaper is used until then.</div>
                                   </div>
                                 </div>
                               </div>
