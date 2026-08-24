@@ -26,7 +26,7 @@ const defaultNavItems: NavItem[] = [
 ];
 
 export default function Navbar({ activeItem, navItems = defaultNavItems, onNavClick, position = "bottom-center" }: NavbarProps) {
-  const [currentTime, setCurrentTime] = useState("");
+  const [timeParts, setTimeParts] = useState({ hours: "", minutes: "", ampm: "" });
 
   useEffect(() => {
     const updateTime = () => {
@@ -35,7 +35,11 @@ export default function Navbar({ activeItem, navItems = defaultNavItems, onNavCl
       const minutes = now.getMinutes().toString().padStart(2, "0");
       const ampm = now.getHours() >= 12 ? "PM" : "AM";
       const displayHours = now.getHours() % 12 || 12;
-      setCurrentTime(`${displayHours.toString().padStart(2, "0")}:${minutes} ${ampm}`);
+      setTimeParts({
+        hours: displayHours.toString().padStart(2, "0"),
+        minutes,
+        ampm,
+      });
     };
     updateTime();
     const interval = setInterval(updateTime, 1000);
@@ -56,14 +60,29 @@ export default function Navbar({ activeItem, navItems = defaultNavItems, onNavCl
     <>
       {/* Top Navigation (Desktop) */}
       <nav className="top-navigation hidden md:flex " aria-label="Desktop header">
-        <div className="brand-desktop font-display-timer text-display-timer font-medium text-white" style={{ letterSpacing: "-0.02em" }}>{currentTime}</div>
-        <div className="flex items-center gap-6">
-          <span className="top-header-unavailable material-symbols-outlined text-text-muted text-white" aria-hidden="true" data-icon="close">close</span>
+        <div className="brand-desktop" style={{ fontSize: "58px", fontWeight: 300, letterSpacing: "-2.5px", color: "white", fontFamily: "Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif", display: "flex", flexDirection: "column", alignItems: "flex-start" }}>
+          <span style={{ display: "flex", alignItems: "baseline" }}>
+            <span>{timeParts.hours}:{timeParts.minutes}</span>
+            <span style={{ fontSize: "17px", fontWeight: 400, letterSpacing: "0.2px", opacity: 0.95, marginLeft: "10px" }}>{timeParts.ampm}</span>
+          </span>
+          <div style={{ width: "140px", height: "1px", marginTop: "9px", background: "rgba(255, 255, 255, 0.35)" }} />
+          <div style={{ marginTop: "8px", fontSize: "15px", fontWeight: 400, letterSpacing: "0.1px", color: "rgba(255, 255, 255, 0.72)" }}>
+            Focus deeply. Make progress.
+          </div>
         </div>
       </nav>
       {/* Top Navigation (Mobile) */}
       <nav className="top-navigation md:hidden flex" aria-label="Mobile header">
-        <div className="brand-mobile font-display-timer text-display-timer font-medium text-white" style={{ letterSpacing: "-0.02em" }}>{currentTime}</div>
+        <div className="brand-mobile" style={{ fontSize: "58px", fontWeight: 300, letterSpacing: "-2.5px", color: "white", fontFamily: "Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif", display: "flex", flexDirection: "column", alignItems: "flex-start" }}>
+          <span style={{ display: "flex", alignItems: "baseline" }}>
+            <span>{timeParts.hours}:{timeParts.minutes}</span>
+            <span style={{ fontSize: "17px", fontWeight: 400, letterSpacing: "0.2px", opacity: 0.95, marginLeft: "10px" }}>{timeParts.ampm}</span>
+          </span>
+          <div style={{ width: "140px", height: "1px", marginTop: "9px", background: "rgba(255, 255, 255, 0.35)" }} />
+          <div style={{ marginTop: "8px", fontSize: "15px", fontWeight: 400, letterSpacing: "0.1px", color: "rgba(255, 255, 255, 0.72)" }}>
+            Focus deeply. Make progress.
+          </div>
+        </div>
       </nav>
 
       {/* Bottom Navigation Dock - Bottom Center (Default) */}

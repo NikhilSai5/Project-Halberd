@@ -270,7 +270,7 @@ export default function Home({ showTodoList = true }: HomeProps) {
         ) : (
           <div className="flex flex-col items-center justify-center text-center flex-1">
             {/* Greeting at top */}
-            <div className="w-full max-w-2xl mx-auto px-4 text-center">
+            <div className="w-full max-w-2xl mx-auto px-4 text-center -mt-16">
               <div className="caption-copy text-white uppercase tracking-widest mb-4">
                 {getDayName()}
               </div>
@@ -282,7 +282,7 @@ export default function Home({ showTodoList = true }: HomeProps) {
 
               {/* Group Circles */}
               {todoGroups.length > 0 && (
-                <div className="mt-8 flex items-center justify-center gap-3">
+                <div className="mt-2 flex items-center justify-center gap-3">
                   {todoGroups.map((group) => {
                     const incompleteCount = getIncompleteCount(group);
                     const isExpanded = expandedGroupId === group.id;
@@ -290,12 +290,12 @@ export default function Home({ showTodoList = true }: HomeProps) {
                       <button
                         key={group.id}
                         onClick={() => handleCircleClick(group.id)}
-                        className={`relative w-7 h-7 md:w-8 md:h-8 rounded-full border-2 border-border-subtle bg-surface-container-low glass-panel flex items-center justify-center transition-all duration-300 hover:border-primary hover:shadow-md ${
+                        className={`relative w-6 h-6 md:w-6 md:h-6 rounded-full border-2 border-border-subtle bg-surface-container-low glass-panel flex items-center justify-center transition-all duration-300 hover:border-primary hover:shadow-md ${
                           isExpanded ? "ring-2 ring-primary ring-offset-2 ring-offset-surface-white scale-105" : ""
                         }`}
                         aria-label={`${group.name}: ${incompleteCount} tasks remaining`}
                       >
-                        <span className="text-lg md:text-xl font-light text-text-primary">
+                        <span className="text-md md:text-md font-Regular text-text-primary">
                           {incompleteCount}
                         </span>
                         <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 text-[10px] font-medium text-text-primary bg-surface-white rounded border border-border-subtle whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
