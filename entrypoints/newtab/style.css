@@ -25,6 +25,82 @@
       transform: translateY(0) scale(1);
     }
   }
+
+  /*
+   * Windows-style page window transition (navbar navigation only).
+   * Applied to the page wrapper by <PageTransition>; never to
+   * individual child elements.
+   *
+   * The close animation only runs when navigating TO the home
+   * page (controlled by <PageTransition animateExitFor>).
+   */
+  .page-window-exit {
+    pointer-events: none;
+    will-change: transform;
+    transform-origin: center bottom;
+    animation: page-window-close 220ms cubic-bezier(0.4, 0, 1, 1) both;
+  }
+
+  @keyframes page-window-close {
+    from {
+      transform: translate3d(0, 0, 0) scale(1);
+      opacity: 1;
+    }
+    to {
+      transform: translate3d(0, 24px, 0) scale(0);
+      opacity: 0.96;
+    }
+  }
+
+  .page-window-enter {
+    will-change: transform;
+    transform-origin: center bottom;
+    animation: page-window-open 550ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+
+  @keyframes page-window-open {
+    from {
+      transform: translate3d(0, 24px, 0) scale(0);
+      opacity: 0.96;
+    }
+    to {
+      transform: translate3d(0, 0, 0) scale(1);
+      opacity: 1;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .page-window-exit,
+    .page-window-enter {
+      will-change: auto;
+    }
+
+    .page-window-exit {
+      animation-name: page-window-close-reduced;
+    }
+
+    .page-window-enter {
+      animation-name: page-window-open-reduced;
+    }
+
+    @keyframes page-window-close-reduced {
+      from {
+        opacity: 1;
+      }
+      to {
+        opacity: 0;
+      }
+    }
+
+    @keyframes page-window-open-reduced {
+      from {
+        opacity: 0;
+      }
+      to {
+        opacity: 1;
+      }
+    }
+  }
 }
 
 @layer base {

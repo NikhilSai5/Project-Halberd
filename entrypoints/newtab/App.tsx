@@ -10,6 +10,7 @@ import Settings from './pages/Settings/Settings';
 import Calendar from './pages/Calendar/Calendar';
 import HabitTracker from './pages/HabitTracker/HabitTracker';
 import Navbar from '@/components/Navbar';
+import PageTransition from '@/components/PageTransition';
 import { SettingsProvider, useSettings } from '@/lib/SettingsContext';
 import './style.css';
 
@@ -74,6 +75,27 @@ function AppContent() {
     return "center_focus_strong";
   };
 
+  const renderPage = (page: Page) => {
+    switch (page) {
+      case "home":
+        return <Home showTodoList={showTodoListInHome} />;
+      case "pomodoro":
+        return <Pomodoro />;
+      case "weekly-goal":
+        return <WeeklyGoal />;
+      case "focus":
+        return <FocusMode />;
+      case "tools":
+        return <Tools />;
+      case "settings":
+        return <Settings />;
+      case "calendar":
+        return <Calendar />;
+      case "habit-tracker":
+        return <HabitTracker />;
+    }
+  };
+
   // Slideshow effect: cycle through images when enabled
   useEffect(() => {
     if (!slideshowSettings.enabled || slideshowSettings.images.length === 0) {
@@ -117,14 +139,12 @@ function AppContent() {
       <div className="wallpaper-effects" aria-hidden="true" />
       <div className="app-shell-content">
         <Navbar activeItem={getActiveItem()} onNavClick={handleNavClick} position={navbarPosition} />
-        {currentPage === "home" && <Home showTodoList={showTodoListInHome} />}
-        {currentPage === "pomodoro" && <Pomodoro />}
-        {currentPage === "weekly-goal" && <WeeklyGoal />}
-        {currentPage === "focus" && <FocusMode />}
-        {currentPage === "tools" && <Tools />}
-        {currentPage === "settings" && <Settings />}
-        {currentPage === "calendar" && <Calendar />}
-        {currentPage === "habit-tracker" && <HabitTracker />}
+        <PageTransition
+          pageKey={currentPage}
+          renderPage={renderPage}
+          animateExitFor={(key) => key === "home"}
+          animateEnterFor={(key) => key !== "home"}
+        />
       </div>
     </div>
   );
