@@ -118,10 +118,10 @@ export default function Home({ showTodoList = true }: HomeProps) {
           <>
             {/* Header */}
             <div className="mb-6 text-center">
-              <div className="caption-copy text-text-muted uppercase tracking-widest mb-2">
+              <div className="caption-copy text-white uppercase tracking-widest mb-2">
                 {getDayName()}
               </div>
-              <h1 className="page-title text-text-primary ">
+              <h1 className="page-title text-white">
                 Good morning.
               </h1>
             </div>
@@ -271,10 +271,10 @@ export default function Home({ showTodoList = true }: HomeProps) {
           <div className="flex flex-col items-center justify-center text-center flex-1">
             {/* Greeting at top */}
             <div className="w-full max-w-2xl mx-auto px-4 text-center">
-              <div className="caption-copy text-text-muted uppercase tracking-widest mb-4">
+              <div className="caption-copy text-white uppercase tracking-widest mb-4">
                 {getDayName()}
               </div>
-              <h1 className={`font-headline-page text-headline-page text-text-primary transition-all duration-300 ${
+              <h1 className={`font-headline-page text-headline-page text-white transition-all duration-300 ${
                 expandedGroupId ? "text-3xl md:text-4xl font-normal" : "text-6xl md:text-7xl font-light"
               }`}>
                 Good Morning

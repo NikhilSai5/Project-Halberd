@@ -411,6 +411,9 @@ export default function Settings() {
                 <>
                   <h3 className="page-title text-on-surface settings-page-heading hidden md:block">Wallpaper</h3>
                   <div className="settings-sections space-y-section-gap">
+                    
+                
+
                     {/* Upload Your Own Wallpapers */}
                     <div className="settings-section">
                       <div className="flex items-center justify-between mb-4">
@@ -425,7 +428,7 @@ export default function Settings() {
                         )}
                       </div>
                       <div className="space-y-4">
-                        <label className="relative cursor-pointer">
+                        <div className="relative">
                           <input
                             ref={fileInputRef}
                             type="file"
@@ -437,12 +440,13 @@ export default function Settings() {
                           />
                           <button
                             type="button"
+                            onClick={() => fileInputRef.current?.click()}
                             className="w-20 h-20 rounded-xl border-2 border-border-subtle bg-surface-container-low hover:border-primary hover:bg-surface-container transition-all flex flex-col items-center justify-center gap-2"
                           >
                             <span className="material-symbols-outlined text-3xl text-text-muted">cloud_upload</span>
                             <span className="label-copy text-text-secondary">Upload</span>
                           </button>
-                        </label>
+                        </div>
                         {wallpapers.length > 0 && (
                           <>
                             <div className="flex items-center justify-between text-sm text-text-secondary">
@@ -482,7 +486,7 @@ export default function Settings() {
                       </div>
                     </div>
 
-                    <div className="settings-section">
+<div className="settings-section">
                       <h4 className="section-heading text-text-primary">Background Adjustments</h4>
                       <div className="settings-slider-group">
                         <div className="flex justify-between items-center">

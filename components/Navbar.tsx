@@ -56,21 +56,21 @@ export default function Navbar({ activeItem, navItems = defaultNavItems, onNavCl
     <>
       {/* Top Navigation (Desktop) */}
       <nav className="top-navigation hidden md:flex " aria-label="Desktop header">
-        <div className="brand-desktop font-headline-page text-headline-page font-medium text-text-primary dark:text-surface-white text-white">Halberd</div>
+        <div className="brand-desktop font-display-timer text-display-timer font-medium text-white" style={{ letterSpacing: "-0.02em" }}>{currentTime}</div>
         <div className="flex items-center gap-6">
           <span className="top-header-unavailable material-symbols-outlined text-text-muted text-white" aria-hidden="true" data-icon="close">close</span>
         </div>
       </nav>
       {/* Top Navigation (Mobile) */}
       <nav className="top-navigation md:hidden flex" aria-label="Mobile header">
-        <div className="brand-mobile font-headline-page-mobile text-headline-page-mobile font-medium text-text-primary">Halberd</div>
+        <div className="brand-mobile font-display-timer text-display-timer font-medium text-white" style={{ letterSpacing: "-0.02em" }}>{currentTime}</div>
       </nav>
 
       {/* Bottom Navigation Dock - Bottom Center (Default) */}
       {isBottomCenter && (
         <div className="dock-shell fixed left-1/2 -translate-x-1/2 bottom-dock-inset z-50">
-          <div className="dock-meta dock-meta--left hidden sm:flex font-caption-metadata text-caption-metadata text-text-muted uppercase tracking-widest">
-            {currentTime}
+          <div className="dock-meta dock-meta--left hidden sm:flex font-headline-page text-headline-page font-medium text-white">
+            Halberd
           </div>
           <nav className="dock-nav flex flex-row items-center justify-center" aria-label="Primary navigation">
             {navItems.map((item) => (
@@ -97,10 +97,10 @@ export default function Navbar({ activeItem, navItems = defaultNavItems, onNavCl
               </button>
             ))}
           </nav>
-          <div className="dock-meta dock-meta--right hidden sm:flex text-text-muted">
-            <div className="flex items-center gap-1 mr-4 text-white">
-              <span className="material-symbols-outlined text-[18px] text-text-secondary" aria-hidden="true">light_mode</span>
-              <span className="font-label-secondary text-label-secondary text-text-secondary">24°</span>
+          <div className="dock-meta dock-meta--right hidden sm:flex text-white">
+            <div className="flex items-center gap-1 mr-4">
+              <span className="material-symbols-outlined text-[18px] text-white" aria-hidden="true">light_mode</span>
+              <span className="font-label-secondary text-label-secondary text-white">24°</span>
             </div>
             <span className="material-symbols-outlined text-[20px] opacity-50" aria-hidden="true">pets</span>
           </div>
@@ -137,10 +137,10 @@ export default function Navbar({ activeItem, navItems = defaultNavItems, onNavCl
           </div>
           <div className="dock-meta dock-meta--right mb-4 text-center px-2">
             <div className="flex items-center justify-center gap-1 mb-2">
-              <span className="material-symbols-outlined text-[18px] text-text-secondary" aria-hidden="true">light_mode</span>
-              <span className="font-label-secondary text-label-secondary text-text-secondary">24°</span>
+              <span className="material-symbols-outlined text-[18px] text-white" aria-hidden="true">light_mode</span>
+              <span className="font-label-secondary text-label-secondary text-white">24°</span>
             </div>
-            <span className="material-symbols-outlined text-[20px] opacity-50">pets</span>
+            <span className="material-symbols-outlined text-[20px] opacity-50 text-white" aria-hidden="true">pets</span>
           </div>
         </nav>
       )}
@@ -175,10 +175,10 @@ export default function Navbar({ activeItem, navItems = defaultNavItems, onNavCl
           </div>
           <div className="dock-meta dock-meta--right mb-4 text-center px-2">
             <div className="flex items-center justify-center gap-1 mb-2">
-              <span className="material-symbols-outlined text-[18px] text-text-secondary" aria-hidden="true">light_mode</span>
-              <span className="font-label-secondary text-label-secondary text-text-secondary">24°</span>
+              <span className="material-symbols-outlined text-[18px] text-white" aria-hidden="true">light_mode</span>
+              <span className="font-label-secondary text-label-secondary text-white">24°</span>
             </div>
-            <span className="material-symbols-outlined text-[20px] opacity-50">pets</span>
+            <span className="material-symbols-outlined text-[20px] opacity-50 text-white" aria-hidden="true">pets</span>
           </div>
         </nav>
       )}
