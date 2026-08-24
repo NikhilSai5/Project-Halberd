@@ -101,8 +101,8 @@ export default function Navbar({ activeItem, navItems = defaultNavItems, onNavCl
                 title={item.label}
                 className={`icon-button dock-button transition-all ${
                   item.icon === activeItem
-                    ? "bg-primary-container/30 text-primary"
-                    : "text-text-secondary hover:text-primary transition-colors"
+                    ? "bg-primary-container/30 text-white"
+                    : "text-white/80 hover:text-white transition-colors"
                 }`}
               >
                 <span

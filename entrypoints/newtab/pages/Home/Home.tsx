@@ -113,7 +113,7 @@ export default function Home({ showTodoList = true }: HomeProps) {
   return (
     <div className="page-shell page-shell--centered text-text-primary font-body-main selection:bg-primary-container selection:text-on-primary-container relative overflow-hidden">
       {/* Main Workspace */}
-      <main className="page-main page-main--narrow flex-1 flex flex-col justify-start pt-8">
+      <main className="page-main page-main--narrow flex-1 flex flex-col justify-start ">
         {showTodoList ? (
           <>
             {/* Header */}

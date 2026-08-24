@@ -1180,13 +1180,15 @@
     height: 64px;
     gap: 4px;
     padding-inline: 16px;
-    border: 1px solid #e9e9e5;
+    border: 1px solid rgba(255, 255, 255, 0.2);
     border-radius: 9999px;
-    /* background-color: rgb(255 255 255 / 80%); */
-    background-color: white;
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
-    backdrop-filter: blur(16px);
-    -webkit-backdrop-filter: blur(16px);
+    background-color: rgba(255, 255, 255, 0.15);
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    box-shadow: 
+      0 8px 32px rgba(0, 0, 0, 0.12),
+      0 2px 8px rgba(0, 0, 0, 0.08),
+      inset 0 1px 0 rgba(255, 255, 255, 0.2);
   }
 
   .dock-button {
@@ -1198,11 +1200,11 @@
   }
 
   .dock-button:hover {
-    background-color: rgb(244 244 242 / 80%);
+    background-color: rgba(255, 255, 255, 0.25);
   }
 
   .dock-button.bg-primary-container\/30:hover {
-    background-color: rgb(185 217 192 / 45%);
+    background-color: rgba(185, 217, 192, 0.5);
   }
 
   .dock-button:focus-visible {
