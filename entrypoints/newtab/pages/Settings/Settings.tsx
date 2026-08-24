@@ -52,6 +52,8 @@ export default function Settings() {
     setWallpaperBlur,
     wallpaperDarkness,
     setWallpaperDarkness,
+    slideshowSettings,
+    setSlideshowSettings,
     todoGroups, 
     addTodoGroup, 
     updateTodoGroupName, 
@@ -60,11 +62,15 @@ export default function Settings() {
     updateTodo, 
     deleteTodo,
     showTodoListInHome, 
-    setShowTodoListInHome 
+    setShowTodoListInHome,
+    weeklyGoals,
+    setWeeklyGoals,
+    addWeeklyGoal,
+    updateWeeklyGoal,
+    deleteWeeklyGoal,
+    toggleWeeklyGoalComplete
   } = useSettings();
   
-  const [slideshowEnabled, setSlideshowEnabled] = useState(false);
-  const [slideshowInterval, setSlideshowInterval] = useState("30min");
   const [liveWallpaperEnabled, setLiveWallpaperEnabled] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const folderInputRef = useRef<HTMLInputElement>(null);
@@ -88,35 +94,8 @@ export default function Settings() {
     });
   };
 
-  // Goals state
-  const [weeklyGoals, setWeeklyGoals] = useState<WeeklyGoal[]>([
-    {
-      id: "1",
-      name: "Learn Distributed Systems",
-      targetHours: 10,
-      startDate: "2026-08-18",
-      endDate: "2026-08-24",
-      sessions: [
-        { timeRange: "06:55 - 11:00", description: "studying distributed computing" },
-        { timeRange: "13:20 - 15:45", description: "researching consensus algorithms" },
-        { timeRange: "16:00 - 18:15", description: "reading Paxos vs Raft whitepapers" },
-      ],
-      completed: false,
-    },
-    {
-      id: "2",
-      name: "Build Halberd Extension",
-      targetHours: 15,
-      startDate: "2026-08-11",
-      endDate: "2026-08-17",
-      sessions: [
-        { timeRange: "09:00 - 12:00", description: "setting up WXT project" },
-        { timeRange: "14:00 - 18:00", description: "building settings page" },
-      ],
-      completed: true,
-    },
-  ]);
   const [showAddGoalForm, setShowAddGoalForm] = useState(false);
+  const [editingGoalId, setEditingGoalId] = useState<string | null>(null);
   const [newGoalName, setNewGoalName] = useState("");
   const [newGoalTargetHours, setNewGoalTargetHours] = useState(10);
   const [newGoalStartDate, setNewGoalStartDate] = useState<string>(() => new Date().toISOString().split("T")[0] ?? "");
@@ -160,32 +139,47 @@ export default function Settings() {
     const files = e.target.files;
     if (!files) return;
 
-    Array.from(files).forEach((file) => {
-      if (!file.type.startsWith("image/")) return;
+    const imageFiles = Array.from(files).filter(file => file.type.startsWith("image/"));
+    if (imageFiles.length === 0) {
+      if (e.target) e.target.value = "";
+      return;
+    }
 
+    const readPromises = imageFiles.map(file => new Promise<string>((resolve, reject) => {
       const reader = new FileReader();
       reader.onload = (event) => {
+        const result = event.target?.result as string;
         const newWallpaper: WallpaperFile = {
           id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
           name: file.name,
-          preview: event.target?.result as string,
+          preview: result,
         };
         addWallpaper(newWallpaper);
+        resolve(result);
       };
+      reader.onerror = () => reject(reader.error);
       reader.readAsDataURL(file);
-    });
+    }));
+
+    Promise.all(readPromises).then(newImages => {
+      if (newImages.length > 0) {
+        setSlideshowSettings(prev => ({
+          ...prev,
+          images: [...prev.images, ...newImages],
+        }));
+      }
+    }).catch(err => console.error("Failed to read folder images:", err));
 
     // Reset input value
     if (e.target) e.target.value = "";
   };
 
   // Goals functions
-  const addWeeklyGoal = () => {
+  const handleAddWeeklyGoal = () => {
     if (!newGoalName.trim()) return;
     const fallbackDate = new Date().toISOString().split("T")[0] ?? "";
     const startDate = newGoalStartDate || fallbackDate;
-    const newGoal: WeeklyGoal = {
-      id: `${Date.now()}`,
+    const goalData: Omit<WeeklyGoal, "id"> = {
       name: newGoalName,
       targetHours: newGoalTargetHours,
       startDate,
@@ -195,21 +189,32 @@ export default function Settings() {
       sessions: [],
       completed: false,
     };
-    setWeeklyGoals((prev) => [...prev, newGoal]);
+    if (editingGoalId) {
+      updateWeeklyGoal(editingGoalId, goalData);
+      setEditingGoalId(null);
+    } else {
+      addWeeklyGoal(goalData);
+    }
     setShowAddGoalForm(false);
     setNewGoalName("");
     setNewGoalTargetHours(10);
     setNewGoalStartDate(fallbackDate);
   };
 
-  const deleteWeeklyGoal = (id: string) => {
-    setWeeklyGoals((prev) => prev.filter((g) => g.id !== id));
+  const startEditGoal = (goal: WeeklyGoal) => {
+    setEditingGoalId(goal.id);
+    setNewGoalName(goal.name);
+    setNewGoalTargetHours(goal.targetHours);
+    setNewGoalStartDate(goal.startDate);
+    setShowAddGoalForm(true);
   };
 
-  const toggleGoalComplete = (id: string) => {
-    setWeeklyGoals((prev) =>
-      prev.map((g) => (g.id === id ? { ...g, completed: !g.completed } : g))
-    );
+  const cancelEdit = () => {
+    setEditingGoalId(null);
+    setShowAddGoalForm(false);
+    setNewGoalName("");
+    setNewGoalTargetHours(10);
+    setNewGoalStartDate(new Date().toISOString().split("T")[0] ?? "");
   };
 
   const formatDate = (dateStr: string) => {
@@ -224,20 +229,9 @@ export default function Settings() {
 
   return (
     <div className="page-shell page-shell--centered text-on-surface flex flex-col font-body-main antialiased selection:bg-secondary-container selection:text-on-secondary-container">
-      <header className="w-full top-0 px-[20px] pt-[20px]">
-        {/* <div className="flex justify-between items-center max-w-[1440px] mx-auto w-full">
-          <div className="font-headline-page text-headline-page font-medium text-on-surface flex items-center gap-2">
-            <span className="material-symbols-outlined text-primary">target</span>
-            Halberd
-          </div>
-          <div className="flex items-center gap-4">
-            <button className="text-on-surface-variant hover:text-primary transition-colors scale-95 duration-200">
-              <span className="material-symbols-outlined">close</span>
-            </button>
-          </div>
-        </div> */}
-      </header>
+      <header className="w-full top-0 px-[20px] pt-[20px]"> </header>
       <main className="page-main flex-grow flex items-center justify-center relative z-10">
+        
         <div className="workspace-surface workspace-settings settings-panel w-full flex flex-col md:flex-row overflow-hidden relative">
           <div className="settings-mobile-header md:hidden">
             <h1 className="section-heading text-on-surface">Settings</h1>
@@ -530,30 +524,30 @@ export default function Settings() {
                           </div>
                           <button
                             role="switch"
-                            aria-checked={slideshowEnabled}
-                            onClick={() => setSlideshowEnabled(!slideshowEnabled)}
+                            aria-checked={slideshowSettings.enabled}
+                            onClick={() => setSlideshowSettings({ enabled: !slideshowSettings.enabled })}
                             className={`settings-toggle relative w-11 h-6 rounded-full transition-colors ${
-                              slideshowEnabled ? "bg-primary" : "bg-surface-container-high"
+                              slideshowSettings.enabled ? "bg-primary" : "bg-surface-container-high"
                             }`}
                             aria-label="Toggle slideshow"
                           >
                             <span
                               className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-surface-white shadow-md transition-transform ${
-                                slideshowEnabled ? "translate-x-full" : "translate-x-0"
+                                slideshowSettings.enabled ? "translate-x-full" : "translate-x-0"
                               }`}
                             />
                           </button>
                         </div>
-                        {slideshowEnabled && (
+                        {slideshowSettings.enabled && (
                           <div className="space-y-4 ml-14 border-l-2 border-border-subtle pl-4">
                             <div className="settings-field">
                               <label className="font-label-secondary text-label-secondary text-text-secondary">Interval</label>
                               <div className="settings-select-wrap">
                                 <select
-                                  value={slideshowInterval}
-                                  onChange={(e) => setSlideshowInterval(e.target.value)}
+                                  value={slideshowSettings.interval}
+                                  onChange={(e) => setSlideshowSettings({ interval: e.target.value })}
                                   className="form-control settings-select bg-transparent font-body-main text-body-main text-on-surface appearance-none"
-                                  disabled={!slideshowEnabled}
+                                  disabled={!slideshowSettings.enabled}
                                 >
                                   <option value="15min">Every 15 minutes</option>
                                   <option value="30min">Every 30 minutes</option>
@@ -592,7 +586,7 @@ export default function Settings() {
                               </div>
                             </div>
 
-                            {wallpapers.length === 0 && (
+                            {wallpapers.length === 0 && slideshowSettings.images.length === 0 && (
                               <div className="settings-info-banner bg-warning-container/20 border border-warning-container/30 rounded-lg p-4">
                                 <div className="flex items-start gap-3">
                                   <span className="material-symbols-outlined text-warning text-[20px] mt-0.5" aria-hidden="true">warning</span>
@@ -870,16 +864,16 @@ export default function Settings() {
                           </div>
                           <div className="flex gap-3 pt-2">
                             <button
-                              onClick={addWeeklyGoal}
+                              onClick={handleAddWeeklyGoal}
                               className="button-regular font-section-title text-section-title flex-1"
                             >
-                              Save Goal
+                              {editingGoalId ? "Update Goal" : "Save Goal"}
                             </button>
                             <button
-                              onClick={() => setShowAddGoalForm(false)}
+                              onClick={editingGoalId ? cancelEdit : () => setShowAddGoalForm(false)}
                               className="button-regular button-regular--outlined font-section-title text-section-title flex-1"
                             >
-                              Cancel
+                              {editingGoalId ? "Cancel Edit" : "Cancel"}
                             </button>
                           </div>
                         </div>
@@ -909,7 +903,14 @@ export default function Settings() {
                               </div>
                               <div className="flex items-center gap-2">
                                 <button
-                                  onClick={() => toggleGoalComplete(goal.id)}
+                                  onClick={() => startEditGoal(goal)}
+                                  className="icon-button text-text-muted hover:text-primary transition-colors p-1 rounded-full hover:bg-surface-container"
+                                  aria-label={`Edit ${goal.name}`}
+                                >
+                                  <span className="material-symbols-outlined text-[20px]" aria-hidden="true">edit</span>
+                                </button>
+                                <button
+                                  onClick={() => toggleWeeklyGoalComplete(goal.id)}
                                   className="button-regular button-regular--outlined font-section-title text-section-title text-primary border-primary text-sm px-3 py-1.5"
                                 >
                                   Mark Complete
@@ -973,7 +974,7 @@ export default function Settings() {
                                 <div className="label-copy text-text-secondary mt-0.5">{formatDate(goal.startDate)} - {formatDate(goal.endDate)} · {calculateTotalTime(goal.sessions)} · {goal.targetHours}h target</div>
                               </div>
                               <button
-                                onClick={() => toggleGoalComplete(goal.id)}
+                                onClick={() => toggleWeeklyGoalComplete(goal.id)}
                                 className="button-regular button-regular--outlined font-section-title text-section-title text-primary border-primary text-sm px-3 py-1.5"
                               >
                                 Restore

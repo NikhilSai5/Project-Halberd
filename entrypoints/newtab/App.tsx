@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Home from './pages/Home/Home';
 import Pomodoro from './pages/Pomodoro/Pomodoro';
 import WeeklyGoal from './pages/WeeklyGoal/WeeklyGoal';
@@ -16,6 +16,18 @@ import './style.css';
 type Page = "home" | "pomodoro" | "weekly-goal" | "focus" | "tools" | "settings" | "calendar" | "habit-tracker";
 type NavbarPosition = "bottom-center" | "left" | "right";
 
+function getIntervalMs(interval: string): number {
+  switch (interval) {
+    case "15min": return 15 * 60 * 1000;
+    case "30min": return 30 * 60 * 1000;
+    case "1hr": return 60 * 60 * 1000;
+    case "6hr": return 6 * 60 * 60 * 1000;
+    case "12hr": return 12 * 60 * 60 * 1000;
+    case "24hr": return 24 * 60 * 60 * 1000;
+    default: return 30 * 60 * 1000;
+  }
+}
+
 function AppContent() {
   const {
     showTodoListInHome,
@@ -23,10 +35,12 @@ function AppContent() {
     activeWallpaper,
     wallpaperBlur,
     wallpaperDarkness,
+    slideshowSettings,
   } = useSettings();
   const [currentPage, setCurrentPage] = useState<Page>("home");
   const [focusTrigger, setFocusTrigger] = useState<"center_focus_strong" | "analytics">("analytics");
   const [navbarPosition, setNavbarPosition] = useState<NavbarPosition>("bottom-center");
+  const [slideshowIndex, setSlideshowIndex] = useState(0);
 
   const handleNavClick = (icon: string) => {
     if (icon === "timer") {
@@ -60,10 +74,34 @@ function AppContent() {
     return "center_focus_strong";
   };
 
-  const selectedWallpaper = wallpapers.find((wallpaper) => wallpaper.id === activeWallpaper);
+  // Slideshow effect: cycle through images when enabled
+  useEffect(() => {
+    if (!slideshowSettings.enabled || slideshowSettings.images.length === 0) {
+      setSlideshowIndex(0);
+      return;
+    }
 
-  const backgroundStyle = selectedWallpaper ? {
-    backgroundImage: `url("${selectedWallpaper.preview}")`,
+    const intervalMs = getIntervalMs(slideshowSettings.interval);
+    const timer = setInterval(() => {
+      setSlideshowIndex(prev => (prev + 1) % slideshowSettings.images.length);
+    }, intervalMs);
+
+    return () => clearInterval(timer);
+  }, [slideshowSettings.enabled, slideshowSettings.interval, slideshowSettings.images.length]);
+
+  // Determine current background image
+  let backgroundImage: string | null = null;
+  if (slideshowSettings.enabled && slideshowSettings.images.length > 0) {
+    backgroundImage = slideshowSettings.images[slideshowIndex] ?? null;
+  } else {
+    const selectedWallpaper = wallpapers.find((wallpaper) => wallpaper.id === activeWallpaper);
+    if (selectedWallpaper) {
+      backgroundImage = selectedWallpaper.preview;
+    }
+  }
+
+  const backgroundStyle = backgroundImage ? {
+    backgroundImage: `url("${backgroundImage}")`,
     backgroundSize: 'cover',
     backgroundPosition: 'center',
     backgroundRepeat: 'no-repeat',

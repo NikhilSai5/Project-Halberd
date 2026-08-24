@@ -1,7 +1,7 @@
 "use client";
 
 import { createContext, useContext, useState, useEffect, type ReactNode } from "react";
-import { getWallpapers, addWallpaperToDB, removeWallpaperFromDB, clearAllWallpapersFromDB } from '@/lib/db';
+import { getWallpapers, addWallpaperToDB, removeWallpaperFromDB, clearAllWallpapersFromDB, getWeeklyGoals, addWeeklyGoalToDB, removeWeeklyGoalFromDB } from '@/lib/db';
 
 export interface TodoItem {
   id: string;
@@ -26,6 +26,22 @@ export interface WallpaperFile {
   id: string;
   name: string;
   preview: string;
+}
+
+export interface SlideshowSettings {
+  enabled: boolean;
+  interval: string;
+  images: string[];
+}
+
+export interface WeeklyGoal {
+  id: string;
+  name: string;
+  targetHours: number;
+  startDate: string;
+  endDate: string;
+  sessions: { timeRange: string; description: string }[];
+  completed: boolean;
 }
 
 interface SettingsContextType {
@@ -55,6 +71,14 @@ interface SettingsContextType {
   setWallpaperBlur: (value: number) => void;
   wallpaperDarkness: number;
   setWallpaperDarkness: (value: number) => void;
+  slideshowSettings: SlideshowSettings;
+  setSlideshowSettings: (settings: Partial<SlideshowSettings> | ((prev: SlideshowSettings) => SlideshowSettings)) => void;
+  weeklyGoals: WeeklyGoal[];
+  setWeeklyGoals: (goals: WeeklyGoal[]) => void;
+  addWeeklyGoal: (goal: Omit<WeeklyGoal, "id">) => void;
+  updateWeeklyGoal: (goalId: string, updates: Partial<WeeklyGoal>) => void;
+  deleteWeeklyGoal: (goalId: string) => void;
+  toggleWeeklyGoalComplete: (goalId: string) => void;
 }
 
 const SettingsContext = createContext<SettingsContextType | undefined>(undefined);
@@ -111,6 +135,19 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   const [activeWallpaper, setActiveWallpaper] = useState<string | null>(null);
   const [wallpaperBlur, setWallpaperBlur] = useState(0);
   const [wallpaperDarkness, setWallpaperDarkness] = useState(0);
+  const [slideshowSettings, setSlideshowSettingsState] = useState<SlideshowSettings>({
+    enabled: false,
+    interval: "30min",
+    images: [],
+  });
+  const [weeklyGoals, setWeeklyGoals] = useState<WeeklyGoal[]>([]);
+
+  const setSlideshowSettings = (settings: Partial<SlideshowSettings> | ((prev: SlideshowSettings) => SlideshowSettings)) => {
+    setSlideshowSettingsState(prev => 
+      typeof settings === 'function' ? settings(prev) : { ...prev, ...settings }
+    );
+  };
+
   const [initialized, setInitialized] = useState(false);
 
   useEffect(() => {
@@ -208,10 +245,29 @@ useEffect(() => {
     const storedWallpaperDarkness = localStorage.getItem("wallpaperDarkness");
     if (storedWallpaperDarkness !== null) setWallpaperDarkness(Number(storedWallpaperDarkness) || 0);
     
+    const storedSlideshow = localStorage.getItem("slideshowSettings");
+    if (storedSlideshow !== null) {
+      try {
+        const parsed = JSON.parse(storedSlideshow);
+        if (parsed && typeof parsed === "object") {
+          setSlideshowSettings(prev => ({ ...prev, ...parsed }));
+        }
+      } catch {
+        // ignore parse errors
+      }
+    }
+    
     // Load wallpapers from IndexedDB
     getWallpapers().then((wps) => {
       if (wps.length > 0) {
         setWallpapers(wps);
+      }
+    }).catch(() => {});
+
+    // Load weekly goals from IndexedDB
+    getWeeklyGoals().then((goals) => {
+      if (goals.length > 0) {
+        setWeeklyGoals(goals);
       }
     }).catch(() => {});
 
@@ -254,6 +310,18 @@ useEffect(() => {
     if (!initialized) return;
     localStorage.setItem("wallpaperDarkness", String(wallpaperDarkness));
   }, [wallpaperDarkness, initialized]);
+
+  useEffect(() => {
+    if (!initialized) return;
+    localStorage.setItem("slideshowSettings", JSON.stringify(slideshowSettings));
+  }, [slideshowSettings, initialized]);
+
+  useEffect(() => {
+    if (!initialized) return;
+    weeklyGoals.forEach((goal) => {
+      addWeeklyGoalToDB(goal).catch(() => {});
+    });
+  }, [weeklyGoals, initialized]);
 
   const addTodoGroup = (name?: string) => {
     const newGroup: TodoGroup = {
@@ -366,6 +434,32 @@ useEffect(() => {
     clearAllWallpapersFromDB().catch(() => {});
   };
 
+  const addWeeklyGoal = (goal: Omit<WeeklyGoal, "id">) => {
+    const newGoal: WeeklyGoal = {
+      ...goal,
+      id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+    };
+    setWeeklyGoals((prev) => [...prev, newGoal]);
+    addWeeklyGoalToDB(newGoal).catch(() => {});
+  };
+
+  const updateWeeklyGoal = (goalId: string, updates: Partial<WeeklyGoal>) => {
+    setWeeklyGoals((prev) =>
+      prev.map((g) => (g.id === goalId ? { ...g, ...updates } : g))
+    );
+  };
+
+  const deleteWeeklyGoal = (goalId: string) => {
+    setWeeklyGoals((prev) => prev.filter((g) => g.id !== goalId));
+    removeWeeklyGoalFromDB(goalId).catch(() => {});
+  };
+
+  const toggleWeeklyGoalComplete = (goalId: string) => {
+    setWeeklyGoals((prev) =>
+      prev.map((g) => (g.id === goalId ? { ...g, completed: !g.completed } : g))
+    );
+  };
+
   return (
     <SettingsContext.Provider
       value={{
@@ -395,6 +489,14 @@ useEffect(() => {
         setWallpaperBlur,
         wallpaperDarkness,
         setWallpaperDarkness,
+        slideshowSettings,
+        setSlideshowSettings,
+        weeklyGoals,
+        setWeeklyGoals,
+        addWeeklyGoal,
+        updateWeeklyGoal,
+        deleteWeeklyGoal,
+        toggleWeeklyGoalComplete,
       }}
     >
       {children}
