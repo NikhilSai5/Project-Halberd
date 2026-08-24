@@ -37,11 +37,12 @@ function AppContent() {
     wallpaperBlur,
     wallpaperDarkness,
     slideshowSettings,
+    slideshowIndex,
+    setSlideshowIndex,
   } = useSettings();
   const [currentPage, setCurrentPage] = useState<Page>("home");
   const [focusTrigger, setFocusTrigger] = useState<"center_focus_strong" | "analytics">("analytics");
   const [navbarPosition, setNavbarPosition] = useState<NavbarPosition>("bottom-center");
-  const [slideshowIndex, setSlideshowIndex] = useState(0);
 
   const handleNavClick = (icon: string) => {
     if (icon === "timer") {

@@ -56,6 +56,7 @@ export default function Settings() {
     setSlideshowSettings,
     setSlideshowFolder,
     clearSlideshowFolder,
+    nextSlideshowImage,
     todoGroups, 
     addTodoGroup, 
     updateTodoGroupName, 
@@ -623,6 +624,22 @@ export default function Settings() {
                                 )}
                               </div>
                             </div>
+
+                            {/* Skip to the next slideshow image immediately */}
+                            {slideshowSettings.folderName && slideshowSettings.images.length > 0 && (
+                              <div className="settings-field">
+                                <label className="font-label-secondary text-label-secondary text-text-secondary">Preview</label>
+                                <button
+                                  type="button"
+                                  onClick={nextSlideshowImage}
+                                  className="button-regular button-secondary font-section-title text-section-title w-full justify-start"
+                                >
+                                  <span className="material-symbols-outlined text-[18px]">skip_next</span>
+                                  Show Next Wallpaper Now
+                                </button>
+                                <div className="label-copy text-text-muted">Instantly switch to the next image in the folder</div>
+                              </div>
+                            )}
 
                             {slideshowSettings.enabled && !slideshowSettings.folderName && (
                               <div className="settings-info-banner bg-warning-container/20 border border-warning-container/30 rounded-lg p-4">

@@ -89,6 +89,9 @@ interface SettingsContextType {
   setSlideshowSettings: (settings: Partial<SlideshowSettings> | ((prev: SlideshowSettings) => SlideshowSettings)) => void;
   setSlideshowFolder: (folderName: string, images: { name: string; data: string }[]) => void;
   clearSlideshowFolder: () => void;
+  slideshowIndex: number;
+  setSlideshowIndex: (value: number | ((prev: number) => number)) => void;
+  nextSlideshowImage: () => void;
   weeklyGoals: WeeklyGoal[];
   setWeeklyGoals: (goals: WeeklyGoal[]) => void;
   addWeeklyGoal: (goal: Omit<WeeklyGoal, "id">) => void;
@@ -195,6 +198,16 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     }));
 
     clearSlideshowImagesFromDB().catch(() => {});
+  };
+
+  const [slideshowIndex, setSlideshowIndex] = useState(0);
+
+  const nextSlideshowImage = () => {
+    setSlideshowIndex(prev =>
+      slideshowSettings.images.length > 0
+        ? (prev + 1) % slideshowSettings.images.length
+        : 0
+    );
   };
 
   const [initialized, setInitialized] = useState(false);
@@ -577,6 +590,9 @@ useEffect(() => {
         setSlideshowSettings,
         setSlideshowFolder,
         clearSlideshowFolder,
+        slideshowIndex,
+        setSlideshowIndex,
+        nextSlideshowImage,
         weeklyGoals,
         setWeeklyGoals,
         addWeeklyGoal,
