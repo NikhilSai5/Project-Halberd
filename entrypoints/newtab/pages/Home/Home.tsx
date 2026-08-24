@@ -3,6 +3,19 @@
 import { useState, useRef, useEffect, useMemo } from "react";
 import { useSettings, type TodoGroup, type TodoItem } from '@/lib/SettingsContext';
 
+const dateBadgeStyle = {
+  display: "inline-flex",
+  alignItems: "center",
+  padding: "4px 8px",
+  borderRadius: "9999px",
+  backgroundColor: "rgba(255, 255, 255, 0.15)",
+  backdropFilter: "blur(20px) saturate(180%)",
+  WebkitBackdropFilter: "blur(20px) saturate(180%)",
+  border: "1px solid rgba(255, 255, 255, 0.2)",
+  marginBottom: "10px",
+  boxShadow: "0 8px 32px rgba(0, 0, 0, 0.12), 0 2px 8px rgba(0, 0, 0, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.2)",
+};
+
 interface HomeProps {
   showTodoList?: boolean;
 }
@@ -60,8 +73,9 @@ export default function Home({ showTodoList = true }: HomeProps) {
 
   const handleSubmitTask = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (!newTaskText.trim() || !activeGroupId) return;
-    addTodoToGroup(activeGroupId, newTaskText.trim());
+    const groupId = activeGroupId || expandedGroupId;
+    if (!newTaskText.trim() || !groupId) return;
+    addTodoToGroup(groupId, newTaskText.trim());
     setNewTaskText("");
     setAddingTask(false);
   };
@@ -69,8 +83,9 @@ export default function Home({ showTodoList = true }: HomeProps) {
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
-      if (newTaskText.trim() && activeGroupId) {
-        addTodoToGroup(activeGroupId, newTaskText.trim());
+      const groupId = activeGroupId || expandedGroupId;
+      if (newTaskText.trim() && groupId) {
+        addTodoToGroup(groupId, newTaskText.trim());
         setNewTaskText("");
         setAddingTask(false);
       }
@@ -118,10 +133,12 @@ export default function Home({ showTodoList = true }: HomeProps) {
           <>
             {/* Header */}
             <div className="mb-6 text-center">
-              <div className="caption-copy text-white uppercase tracking-widest mb-2">
-                {getDayName()}
+              <div style={dateBadgeStyle}>
+                <span className="caption-copy text-white uppercase tracking-widest ">
+                  {getDayName()}
+                </span>
               </div>
-              <h1 className="page-title text-white">
+              <h1 className="page-title text-white mt-4">
                 Good morning.
               </h1>
             </div>
@@ -271,8 +288,10 @@ export default function Home({ showTodoList = true }: HomeProps) {
           <div className="flex flex-col items-center justify-center text-center flex-1">
             {/* Greeting at top */}
             <div className="w-full max-w-2xl mx-auto px-4 text-center -mt-16">
-              <div className="caption-copy text-white uppercase tracking-widest mb-4">
-                {getDayName()}
+              <div style={dateBadgeStyle}>
+                <span className="caption-copy text-white uppercase tracking-widest">
+                  {getDayName()}
+                </span>
               </div>
               <h1 className={`font-headline-page text-headline-page text-white transition-all duration-300 ${
                 expandedGroupId ? "text-3xl md:text-4xl font-normal" : "text-6xl md:text-7xl font-light"
@@ -364,22 +383,51 @@ export default function Home({ showTodoList = true }: HomeProps) {
                     })}
                   </div>
 
-                  {/* Add Task Button - At Bottom */}
-                  <div className="pt-6">
-                    <button
-                      onClick={() => {
-                        setAddingTask(true);
-                        setNewTaskText("");
-                        setTimeout(() => inputRef.current?.focus(), 50);
-                      }}
-                      className="flex items-center gap-2 text-primary font-section-title text-section-title hover:bg-primary-container/30 px-3 py-2 -ml-3 rounded-lg transition-colors group"
-                    >
-                      <span className="material-symbols-outlined text-[18px] group-hover:rotate-90 transition-transform duration-300" style={{ fontVariationSettings: "'FILL' 1" }}>
-                        add
-                      </span>
-                      <span>Add task</span>
-                    </button>
-                  </div>
+                  {/* Add Task Form - At Bottom */}
+                  {addingTask ? (
+                    <form onSubmit={handleSubmitTask} className="mt-6 pt-6 border-t border-border-subtle -mx-6 px-6 md:-mx-8 md:px-8">
+                      <div className="relative">
+                        <input
+                          ref={inputRef}
+                          type="text"
+                          value={newTaskText}
+                          onChange={(e) => setNewTaskText(e.target.value)}
+                          onKeyDown={handleKeyDown}
+                          onBlur={() => {
+                            const groupId = activeGroupId || expandedGroupId;
+                            if (newTaskText.trim() && groupId) {
+                              addTodoToGroup(groupId, newTaskText.trim());
+                              setNewTaskText("");
+                              setAddingTask(false);
+                            } else setAddingTask(false);
+                          }}
+                          placeholder="What needs to be done?"
+                          className="w-full bg-transparent border-none focus:outline-none font-body-main text-body-main text-text-primary placeholder:text-text-muted py-2"
+                          autoFocus
+                        />
+                        <button
+                          type="submit"
+                          disabled={!newTaskText.trim()}
+                          className="absolute right-0 top-1/2 -translate-y-1/2 p-2 text-text-muted hover:text-primary transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                          aria-label="Add task"
+                        >
+                          <span className="material-symbols-outlined text-[22px]" style={{ fontVariationSettings: "'FILL' 1" }}>check</span>
+                        </button>
+                      </div>
+                    </form>
+                  ) : (
+                    <div className="pt-6">
+                      <button
+                        onClick={handleAddTaskClick}
+                        className="flex items-center gap-2 text-primary font-section-title text-section-title hover:bg-primary-container/30 px-3 py-2 -ml-3 rounded-lg transition-colors group"
+                      >
+                        <span className="material-symbols-outlined text-[18px] group-hover:rotate-90 transition-transform duration-300" style={{ fontVariationSettings: "'FILL' 1" }}>
+                          add
+                        </span>
+                        <span>Add task</span>
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
             )}
