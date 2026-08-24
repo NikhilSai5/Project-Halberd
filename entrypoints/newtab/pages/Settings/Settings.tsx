@@ -4,8 +4,9 @@ import { useState, useRef, useEffect } from "react";
 import { useSettings, type TodoGroup, type TodoItem, type WallpaperFile } from '@/lib/SettingsContext';
 
 const navItems = [
-  { icon: "palette", label: "Appearance", id: "appearance" },
   { icon: "wallpaper", label: "Wallpaper", id: "wallpaper" },
+  { icon: "palette", label: "Appearance", id: "appearance" },
+  
   { icon: "dashboard", label: "Layout", id: "layout" },
   { icon: "check_circle", label: "Productivity", id: "productivity" },
   { icon: "flag", label: "Goals", id: "goals" },
@@ -31,7 +32,7 @@ interface WeeklyGoal {
 }
 
 export default function Settings() {
-  const [activeNav, setActiveNav] = useState("appearance");
+  const [activeNav, setActiveNav] = useState("wallpaper");
   const [theme, setTheme] = useState("light");
   const [fontFamily, setFontFamily] = useState("Inter");
   const [fontSize, setFontSize] = useState("Medium");
@@ -416,7 +417,7 @@ export default function Settings() {
 
                     {/* Upload Your Own Wallpapers */}
                     <div className="settings-section">
-                      <div className="flex items-center justify-between mb-4">
+                      <div className="flex items-center justify-between">
                         <h4 className="section-heading text-text-primary">Upload Your Own</h4>
                         {wallpapers.length > 0 && (
                           <button

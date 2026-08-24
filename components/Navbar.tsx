@@ -17,11 +17,11 @@ interface NavbarProps {
 const defaultNavItems: NavItem[] = [
   { icon: "center_focus_strong", label: "Focus" },
   // { icon: "calendar_today", label: "Calendar" },
-  { icon: "emoji_events", label: "Achievements" },
+  { icon: "checklist", label: "Habits" },
   { icon: "timer", label: "Timer" },
   { icon: "analytics", label: "Analytics" },
+  { icon: "emoji_events", label: "Achievements" },
   { icon: "construction", label: "Construction" },
-  { icon: "checklist", label: "Habits" },
   { icon: "settings", label: "Settings" },
 ];
 
