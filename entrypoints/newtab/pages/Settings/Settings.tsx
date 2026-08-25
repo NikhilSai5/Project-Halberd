@@ -6,13 +6,13 @@ import { useSettings, type TodoGroup, type TodoItem, type WallpaperFile } from '
 const navItems = [
   { icon: "wallpaper", label: "Wallpaper", id: "wallpaper" },
   { icon: "palette", label: "Appearance", id: "appearance" },
-  
   { icon: "dashboard", label: "Layout", id: "layout" },
+  { icon: "fitness_center", label: "Habit Tracker", id: "habit-tracker" },
   { icon: "check_circle", label: "Productivity", id: "productivity" },
   // { icon: "flag", label: "Goals", id: "goals" },
   { icon: "link", label: "Connections", id: "connections" },
   { icon: "extension", label: "Extension", id: "extension" },
-  { icon: "fitness_center", label: "Habit Tracker", id: "habit-tracker" },
+  
 ];
 
 const accentColors = [
