@@ -1038,6 +1038,7 @@ export default function Home({
     addTodoToGroup,
     updateTodo,
     deleteTodo,
+    reorderTodos,
     showCompletedTasks,
   } = useSettings();
 
@@ -1054,6 +1055,12 @@ export default function Home({
     useState<Record<string, boolean>>({});
 
   const [expandedGroupId, setExpandedGroupId] =
+    useState<string | null>(null);
+
+  const [draggedTodoId, setDraggedTodoId] =
+    useState<string | null>(null);
+
+  const [draggedGroupId, setDraggedGroupId] =
     useState<string | null>(null);
 
   /*
@@ -1740,6 +1747,81 @@ export default function Home({
   };
 
   /*
+   * ================================================================
+   * DRAG AND DROP HANDLERS
+   * ================================================================
+   */
+
+  const handleDragStart = (
+    e: React.DragEvent,
+    todo: TodoItem,
+    groupId: string
+  ) => {
+    setDraggedTodoId(todo.id);
+    setDraggedGroupId(groupId);
+    e.dataTransfer.effectAllowed = "move";
+    (e.currentTarget as HTMLElement).style.opacity = "0.5";
+  };
+
+  const handleDragOver = (
+    e: React.DragEvent
+  ) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+  };
+
+  const handleDragEnter = (
+    e: React.DragEvent
+  ) => {
+    e.preventDefault();
+    (e.currentTarget as HTMLElement).style.backgroundColor = "rgba(99, 102, 241, 0.1)";
+  };
+
+  const handleDragLeave = (
+    e: React.DragEvent
+  ) => {
+    (e.currentTarget as HTMLElement).style.backgroundColor = "";
+  };
+
+  const handleDrop = (
+    e: React.DragEvent,
+    targetTodo: TodoItem,
+    targetGroupId: string
+  ) => {
+    e.preventDefault();
+    (e.currentTarget as HTMLElement).style.backgroundColor = "";
+
+    if (
+      draggedTodoId &&
+      draggedGroupId &&
+      draggedGroupId === targetGroupId &&
+      draggedTodoId !== targetTodo.id
+    ) {
+      const group = todoGroups.find((g) => g.id === targetGroupId);
+      if (!group) return;
+
+      const fromIndex = group.todos.findIndex(
+        (t) => t.id === draggedTodoId
+      );
+      const toIndex = group.todos.findIndex(
+        (t) => t.id === targetTodo.id
+      );
+
+      if (fromIndex !== -1 && toIndex !== -1) {
+        reorderTodos(targetGroupId, fromIndex, toIndex);
+      }
+    }
+  };
+
+  const handleDragEnd = (
+    e: React.DragEvent
+  ) => {
+    (e.currentTarget as HTMLElement).style.opacity = "";
+    setDraggedTodoId(null);
+    setDraggedGroupId(null);
+  };
+
+  /*
    * Stop editing when the visible group changes so the
    * inline editor never appears on the wrong list.
    */
@@ -1857,12 +1939,41 @@ export default function Home({
       );
     }
 
+    const isDragging = draggedTodoId === todo.id;
+
     return (
       <label
         key={todo.id}
-        className="flex items-center gap-4 py-3 border-b border-border-subtle cursor-pointer group hover:bg-surface-secondary transition-colors -mx-6 px-6 md:-mx-8 md:px-8"
-      >
-
+        draggable={true}
+        onDragStart={(e) => handleDragStart(e, todo, groupId)}
+        onDragOver={handleDragOver}
+        onDragEnter={handleDragEnter}
+        onDragLeave={handleDragLeave}
+        onDrop={(e) => handleDrop(e, todo, groupId)}
+        onDragEnd={handleDragEnd}
+        className={`flex items-center gap-4 py-3 border-b border-border-subtle cursor-pointer group hover:bg-surface-secondary transition-colors -mx-6 px-6 md:-mx-8 md:px-8 ${
+          isDragging ? "opacity-50" : ""
+        }`}
+        style={{
+          backgroundColor: isDragging ? "rgba(99, 102, 241, 0.05)" : undefined,
+        }}
+>
+ 
+        {/* <button
+          draggable="false"
+          className="text-text-muted hover:text-primary cursor-grab active:cursor-grabbing p-1 rounded transition-colors group-hover:opacity-100 opacity-50 focus:opacity-100 focus:outline-none"
+          aria-label="Drag to reorder"
+          onMouseDown={(e) => e.preventDefault()}
+        >
+          <span
+            className="material-symbols-outlined text-[18px]"
+            style={{ fontVariationSettings: "'FILL' 0" }}
+            aria-hidden="true"
+          >
+            drag_indicator
+          </span>
+        </button> */}
+ 
         <div className="relative flex items-center justify-center">
 
           <input

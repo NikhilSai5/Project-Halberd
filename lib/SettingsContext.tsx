@@ -73,6 +73,7 @@ interface SettingsContextType {
   addTodoToGroup: (groupId: string, text?: string) => void;
   updateTodo: (groupId: string, todoId: string, updates: Partial<TodoItem>) => void;
   deleteTodo: (groupId: string, todoId: string) => void;
+  reorderTodos: (groupId: string, fromIndex: number, toIndex: number) => void;
   habits: Habit[];
   addHabit: (habit: Omit<Habit, "id">) => void;
   updateHabit: (habitId: string, updates: Partial<Habit>) => void;
@@ -489,6 +490,19 @@ useEffect(() => {
     );
   };
 
+  const reorderTodos = (groupId: string, fromIndex: number, toIndex: number) => {
+    setTodoGroups((prev) =>
+      prev.map((g) => {
+        if (g.id !== groupId) return g;
+        const todos = [...g.todos];
+        const removed = todos.splice(fromIndex, 1)[0];
+        if (!removed) return g;
+        todos.splice(toIndex, 0, removed);
+        return { ...g, todos };
+      })
+    );
+  };
+
   const addHabit = (habit: Omit<Habit, "id">) => {
     const newHabit: Habit = {
       ...habit,
@@ -621,6 +635,7 @@ useEffect(() => {
         addTodoToGroup,
         updateTodo,
         deleteTodo,
+        reorderTodos,
         habits,
         addHabit,
         updateHabit,
