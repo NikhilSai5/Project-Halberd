@@ -11,6 +11,7 @@ import Calendar from './pages/Calendar/Calendar';
 import HabitTracker from './pages/HabitTracker/HabitTracker';
 import Navbar from '@/components/Navbar';
 import PageTransition from '@/components/PageTransition';
+import FloatingCircle from '@/components/FloatingCircle';
 import { SettingsProvider, useSettings } from '@/lib/SettingsContext';
 import './style.css';
 
@@ -146,6 +147,7 @@ function AppContent() {
           animateExitFor={(key) => key === "home"}
           animateEnterFor={(key) => key !== "home"}
         />
+        <FloatingCircle />
       </div>
     </div>
   );
