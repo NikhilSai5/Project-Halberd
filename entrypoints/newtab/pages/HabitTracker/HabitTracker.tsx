@@ -274,8 +274,8 @@ export default function HabitTracker() {
     <div className="page-shell page-shell--centered font-body-main text-text-primary antialiased selection:bg-primary-container selection:text-on-primary-container relative overflow-hidden">
       <main className="page-main page-main--raised flex-1 flex flex-col items-center justify-center z-10">
         <div
-          className="w-full overflow-hidden flex flex-col"
-          style={{ maxWidth: '515px', background: '#ffffff', borderRadius: '12px', boxShadow: '0 12px 35px rgba(0, 0, 0, 0.18)' }}
+          className="w-full overflow-y-auto scrollbar-hide flex flex-col"
+          style={{ maxWidth: '515px', maxHeight: 'calc(100vh - 204px)', background: '#ffffff', borderRadius: '12px', boxShadow: '0 12px 35px rgba(0, 0, 0, 0.18)' }}
         >
           {/* Header */}
           <header className="flex items-center justify-between px-6 py-3 border-b border-[#e5e5e5]" style={{ height: '58px' }}>
@@ -373,8 +373,8 @@ export default function HabitTracker() {
                           {/* Expanded monthly dropdown - appears under this habit */}
                           {isExpanded && (
                             <div
-                              className="absolute left-0 right-0 animate-slide-down z-10"
-                              style={{ top: '100%', marginTop: '8px', boxShadow: '0 8px 24px rgba(0,0,0,0.12)' }}
+                              className="animate-slide-down z-10"
+                              style={{ marginTop: '8px', marginBottom: '4px', boxShadow: '0 8px 24px rgba(0,0,0,0.12)' }}
                               role="region"
                               aria-label={`Monthly view for ${habit.name}`}
                             >
