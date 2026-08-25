@@ -108,6 +108,7 @@ const ColorPicker = ({
 export default function HabitTracker() {
   const { habits, addHabit, updateHabit, deleteHabit, toggleHabitDate } = useSettings();
   const [expandedHabit, setExpandedHabit] = useState<string | null>(null);
+  const [closingHabit, setClosingHabit] = useState<string | null>(null);
   const [showCreatePanel, setShowCreatePanel] = useState(false);
   const [newHabitName, setNewHabitName] = useState("");
   const [newHabitEmoji, setNewHabitEmoji] = useState("📚");
@@ -135,7 +136,17 @@ export default function HabitTracker() {
   }, []);
 
   const toggleExpand = (id: string) => {
-    setExpandedHabit(expandedHabit === id ? null : id);
+    if (expandedHabit === id) {
+      setClosingHabit(id);
+      setExpandedHabit(null);
+    } else {
+      setClosingHabit(null);
+      setExpandedHabit(id);
+    }
+  };
+
+  const handleClosingAnimationEnd = (habitId: string) => {
+    setClosingHabit((prev) => (prev === habitId ? null : prev));
   };
 
   const handleCreateHabit = () => {
@@ -173,7 +184,6 @@ export default function HabitTracker() {
     setEditHabitName(habit.name);
     setEditHabitEmoji(habit.emoji);
     setEditHabitColor(habit.color || "#94c7a4");
-    setExpandedHabit(null);
   };
 
   const handleEditHabit = () => {
@@ -200,6 +210,9 @@ export default function HabitTracker() {
     deleteHabit(habitId);
     if (expandedHabit === habitId) {
       setExpandedHabit(null);
+    }
+    if (closingHabit === habitId) {
+      setClosingHabit(null);
     }
   };
 
@@ -306,6 +319,7 @@ export default function HabitTracker() {
                   <div>
                     {habits.map((habit) => {
                       const isExpanded = expandedHabit === habit.id;
+                      const isClosing = closingHabit === habit.id;
                       const isEditing = editingHabit === habit.id;
                       return (
                         <div key={habit.id} className="relative" style={{ borderBottom: '1px solid #e5e5e5' }}>
@@ -324,7 +338,7 @@ export default function HabitTracker() {
 
                             {/* Weekly dots - right aligned */}
                             <div className="flex items-center justify-end flex-shrink-0" style={{ width: '184px' }}>
-                              <div className="grid grid-cols-7 items-center justify-items-center" style={{ gap: '0px' }}>
+                              <div className="grid grid-cols-7 items-center justify-items-center" style={{ gap: '12px' }}>
                                 {weeklyDates.map((dateStr) => {
                                   const status = habit.tracking[dateStr] || "upcoming";
                                   const habitColor = habit.color || "#94c7a4";
@@ -371,10 +385,11 @@ export default function HabitTracker() {
                           </div>
 
                           {/* Expanded monthly dropdown - appears under this habit */}
-                          {isExpanded && (
+                          {(isExpanded || isClosing) && (
                             <div
-                              className="animate-slide-down z-10"
-                              style={{ marginTop: '8px', marginBottom: '4px', boxShadow: '0 8px 24px rgba(0,0,0,0.12)' }}
+                              className={`${isClosing ? 'animate-slide-up' : 'animate-slide-down'} z-10`}
+                              style={{ marginTop: '8px', marginBottom: '4px' }}
+                              onAnimationEnd={() => handleClosingAnimationEnd(habit.id)}
                               role="region"
                               aria-label={`Monthly view for ${habit.name}`}
                             >
@@ -438,7 +453,7 @@ export default function HabitTracker() {
                 )}
 
                 {/* Add habit button */}
-                <div style={{ marginTop: '24px', paddingLeft: '12px' }}>
+                <div style={{ marginTop: '14px', paddingLeft: '12px' }}>
                   <button
                     onClick={() => setShowCreatePanel(true)}
                     className="flex items-center gap-3 transition-colors cursor-pointer hover:opacity-70"
