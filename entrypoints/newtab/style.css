@@ -287,7 +287,7 @@
 
   .calendar-grid {
     min-width: 560px;
-    min-height: 660px;
+    min-height: 1440px;
   }
 
   .calendar-time-row {
@@ -373,6 +373,138 @@
 
   .calendar-current-time-line {
     flex: 1;
+  }
+
+  /* ── View Switcher ── */
+  .calendar-view-switcher {
+    display: flex;
+    border: 1px solid #E9E9E5;
+    border-radius: 8px;
+    overflow: hidden;
+  }
+
+  .calendar-view-btn {
+    padding: 6px 14px;
+    font-size: 12px;
+    font-weight: 500;
+    line-height: 16px;
+    color: #707070;
+    background: #ffffff;
+    border: none;
+    cursor: pointer;
+    transition: background 150ms ease, color 150ms ease;
+    white-space: nowrap;
+  }
+
+  .calendar-view-btn + .calendar-view-btn {
+    border-left: 1px solid #E9E9E5;
+  }
+
+  .calendar-view-btn:hover {
+    background: #f4f4f2;
+    color: #242424;
+  }
+
+  .calendar-view-btn--active {
+    background: #f4f4f2;
+    color: #242424;
+    font-weight: 600;
+  }
+
+  /* ── Week View ── */
+  .calendar-week-header-inner {
+    min-width: 560px;
+  }
+
+  .calendar-week-gutter {
+    width: 48px;
+  }
+
+  .calendar-week-col-header {
+    min-width: 0;
+  }
+
+  .calendar-week-date {
+    font-size: 22px;
+    font-weight: 400;
+    line-height: 28px;
+    color: #242424;
+    width: 40px;
+    height: 40px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+  }
+
+  .calendar-week-date--today {
+    background-color: #486551;
+    color: #ffffff;
+    font-weight: 500;
+  }
+
+  .calendar-week-grid {
+    min-width: 560px;
+    min-height: 1440px;
+    padding-left: 0;
+    padding-right: 0;
+  }
+
+  .calendar-week-columns {
+    position: relative;
+  }
+
+  /* ── Month View ── */
+  .calendar-month {
+    min-width: 480px;
+  }
+
+  .calendar-month-header {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    background: #ffffff;
+  }
+
+  .calendar-month-col-label {
+    text-transform: uppercase;
+  }
+
+  .calendar-month-cell {
+    position: relative;
+  }
+
+  .calendar-month-cell--other {
+    background: #fafafa;
+  }
+
+  .calendar-month-cell--other .calendar-month-day-number {
+    opacity: 0.4;
+  }
+
+  .calendar-month-day-number {
+    font-size: 12px;
+    font-weight: 500;
+    line-height: 16px;
+    color: #242424;
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+  }
+
+  .calendar-month-day-number--today {
+    background-color: #486551;
+    color: #ffffff;
+    font-weight: 600;
+  }
+
+  .calendar-month-event {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .workspace-settings {

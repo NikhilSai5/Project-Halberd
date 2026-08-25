@@ -9,8 +9,10 @@ const navItems = [
   
   { icon: "dashboard", label: "Layout", id: "layout" },
   { icon: "check_circle", label: "Productivity", id: "productivity" },
-  { icon: "flag", label: "Goals", id: "goals" },
+  // { icon: "flag", label: "Goals", id: "goals" },
+  { icon: "link", label: "Connections", id: "connections" },
   { icon: "extension", label: "Extension", id: "extension" },
+  { icon: "fitness_center", label: "Habit Tracker", id: "habit-tracker" },
 ];
 
 const accentColors = [
@@ -73,7 +75,11 @@ export default function Settings() {
     addWeeklyGoal,
     updateWeeklyGoal,
     deleteWeeklyGoal,
-    toggleWeeklyGoalComplete
+    toggleWeeklyGoalComplete,
+    habits,
+    addHabit,
+    updateHabit,
+    deleteHabit,
   } = useSettings();
   
   const [liveWallpaperEnabled, setLiveWallpaperEnabled] = useState(false);
@@ -116,6 +122,72 @@ export default function Settings() {
   const [newGoalName, setNewGoalName] = useState("");
   const [newGoalTargetHours, setNewGoalTargetHours] = useState(10);
   const [newGoalStartDate, setNewGoalStartDate] = useState<string>(() => new Date().toISOString().split("T")[0] ?? "");
+
+  // Habit Tracker state
+  const [expandedHabitIds, setExpandedHabitIds] = useState<Set<string>>(new Set());
+  const [showAddHabit, setShowAddHabit] = useState(false);
+  const [newHabitName, setNewHabitName] = useState("");
+  const [newHabitEmoji, setNewHabitEmoji] = useState("📚");
+  const [newHabitColor, setNewHabitColor] = useState("#94c7a4");
+  const [editingHabitId, setEditingHabitId] = useState<string | null>(null);
+  const [editHabitName, setEditHabitName] = useState("");
+  const [editHabitEmoji, setEditHabitEmoji] = useState("");
+  const [editHabitColor, setEditHabitColor] = useState("#94c7a4");
+
+  const toggleHabitExpand = (id: string) => {
+    setExpandedHabitIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const handleAddHabit = () => {
+    if (!newHabitName.trim()) return;
+    const tracking: Record<string, "done" | "missed" | "upcoming"> = {};
+    addHabit({ name: newHabitName.trim(), emoji: newHabitEmoji, color: newHabitColor, tracking });
+    setNewHabitName("");
+    setNewHabitEmoji("📚");
+    setNewHabitColor("#94c7a4");
+    setShowAddHabit(false);
+  };
+
+  const handleEditHabit = (id: string) => {
+    if (!editHabitName.trim()) return;
+    updateHabit(id, { name: editHabitName.trim(), emoji: editHabitEmoji, color: editHabitColor });
+    setEditingHabitId(null);
+  };
+
+  const startEditHabit = (habit: { id: string; name: string; emoji: string; color: string }) => {
+    setEditingHabitId(habit.id);
+    setEditHabitName(habit.name);
+    setEditHabitEmoji(habit.emoji);
+    setEditHabitColor(habit.color);
+  };
+
+  const EMOJIS = ["📚", "💪", "🇯🇵", "🚫", "🧘", "🏃", "💧", "🥗", "🌙", "☀️", "🎯", "📝", "🎨", "🎵", "🌱", "✨"];
+  const HABIT_COLORS = ["#94c7a4", "#6bb3d6", "#d6a66b", "#d66b6b", "#b36bd6", "#6bd6b3", "#d68b6b", "#6bd68b", "#8b6bd6", "#d66bd6", "#6bd6d6", "#d6d66b"];
+
+  const getStreakCount = (tracking: Record<string, "done" | "missed" | "upcoming">): number => {
+    let streak = 0;
+    const today = new Date();
+    for (let i = 0; i < 365; i++) {
+      const d = new Date(today);
+      d.setDate(d.getDate() - i);
+      const dateStr = d.toISOString().split("T")[0]!;
+      const status = tracking[dateStr];
+      if (status === "done") streak++;
+      else if (status === "missed" || status === "upcoming") break;
+    }
+    return streak;
+  };
+
+  const getCompletionRate = (tracking: Record<string, "done" | "missed" | "upcoming">): number => {
+    const total = Object.values(tracking).filter((s) => s !== "upcoming").length;
+    if (total === 0) return 0;
+    const done = Object.values(tracking).filter((s) => s === "done").length;
+    return Math.round((done / total) * 100);
+  };
 
   // Handle file upload for wallpapers
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1138,6 +1210,310 @@ export default function Settings() {
                         <div className="pt-2 border-t border-border-subtle">
                           <a href="#" className="text-primary hover:underline" target="_blank" rel="noopener noreferrer">View License on GitHub</a>
                         </div>
+                      </div>
+                    </div>
+                  </div>
+                </>
+              )}
+
+              {activeNav === "connections" && (
+                <>
+                  <h3 className="page-title text-on-surface settings-page-heading hidden md:block">Connections</h3>
+                  <div className="settings-sections space-y-section-gap">
+                    <div className="settings-section">
+                      <h4 className="section-heading text-text-primary">Integrations</h4>
+                      <div className="space-y-3">
+                        <div className="flex items-center gap-4 p-4 rounded-xl bg-surface-container-low border border-border-subtle">
+                          <div className="w-10 h-10 rounded-lg bg-surface-white border border-border-subtle flex items-center justify-center flex-shrink-0">
+                            <span className="material-symbols-outlined text-[20px] text-text-secondary">calendar_today</span>
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="font-body-main text-body-main text-on-surface font-medium">Google Calendar</div>
+                            <div className="label-copy text-text-secondary">Sync your events and schedule</div>
+                          </div>
+                          <button type="button" className="button-regular button-primary font-label-secondary text-label-secondary flex-shrink-0">
+                            Connect
+                          </button>
+                        </div>
+                        <div className="flex items-center gap-4 p-4 rounded-xl bg-surface-container-low border border-border-subtle">
+                          <div className="w-10 h-10 rounded-lg bg-surface-white border border-border-subtle flex items-center justify-center flex-shrink-0">
+                            <span className="material-symbols-outlined text-[20px] text-text-secondary">check_circle</span>
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="font-body-main text-body-main text-on-surface font-medium">Google Tasks</div>
+                            <div className="label-copy text-text-secondary">Manage your tasks and to-dos</div>
+                          </div>
+                          <button type="button" className="button-regular button-primary font-label-secondary text-label-secondary flex-shrink-0">
+                            Connect
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </>
+              )}
+
+              {activeNav === "habit-tracker" && (
+                <>
+                  <h3 className="page-title text-on-surface settings-page-heading hidden md:block">Habit Tracker</h3>
+                  <div className="settings-sections space-y-section-gap">
+                    <div className="settings-section">
+                      <div className="flex items-center justify-between mb-4">
+                        <h4 className="section-heading text-text-primary">Your Habits</h4>
+                        <button
+                          onClick={() => setShowAddHabit(true)}
+                          className="button-regular font-section-title text-section-title group"
+                        >
+                          <span className="material-symbols-outlined text-[18px] group-hover:rotate-90 transition-transform duration-300" style={{ fontVariationSettings: "'FILL' 1" }}>add</span>
+                          Add Habit
+                        </button>
+                      </div>
+
+                      {/* Add habit form */}
+                      {showAddHabit && (
+                        <div className="mb-4 p-4 rounded-xl border border-border-subtle bg-surface-container-low animate-fade-in">
+                          <div className="space-y-3">
+                            <input
+                              type="text"
+                              value={newHabitName}
+                              onChange={(e) => setNewHabitName(e.target.value)}
+                              placeholder="Habit name..."
+                              className="w-full bg-surface-white border border-border-subtle rounded-lg px-3 py-2 text-sm text-on-surface focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary"
+                              autoFocus
+                              onKeyDown={(e) => { if (e.key === "Enter") handleAddHabit(); if (e.key === "Escape") setShowAddHabit(false); }}
+                            />
+                            <div>
+                              <label className="text-xs font-medium text-text-secondary mb-1.5 block">Emoji</label>
+                              <div className="flex flex-wrap gap-1.5">
+                                {EMOJIS.map((emoji) => (
+                                  <button
+                                    key={emoji}
+                                    type="button"
+                                    onClick={() => setNewHabitEmoji(emoji)}
+                                    className={`w-8 h-8 rounded-lg flex items-center justify-center text-base transition-all duration-150 ${newHabitEmoji === emoji ? "bg-primary-container ring-2 ring-primary scale-110" : "bg-surface-white border border-border-subtle hover:bg-surface-container"}`}
+                                  >
+                                    {emoji}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                            <div>
+                              <label className="text-xs font-medium text-text-secondary mb-1.5 block">Color</label>
+                              <div className="flex flex-wrap gap-1.5">
+                                {HABIT_COLORS.map((color) => (
+                                  <button
+                                    key={color}
+                                    type="button"
+                                    onClick={() => setNewHabitColor(color)}
+                                    className="w-7 h-7 rounded-full transition-all duration-150 flex items-center justify-center"
+                                    style={{
+                                      backgroundColor: color,
+                                      outline: newHabitColor === color ? `2px solid ${color}` : "2px solid transparent",
+                                      outlineOffset: "2px",
+                                      transform: newHabitColor === color ? "scale(1.15)" : "scale(1)",
+                                    }}
+                                  >
+                                    {newHabitColor === color && (
+                                      <span className="material-symbols-outlined text-white text-[14px]" style={{ fontVariationSettings: "'FILL' 1" }}>check</span>
+                                    )}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                            <div className="flex gap-2 pt-1">
+                              <button onClick={() => setShowAddHabit(false)} className="button-regular button-secondary font-label-secondary text-label-secondary">Cancel</button>
+                              <button onClick={handleAddHabit} disabled={!newHabitName.trim()} className="button-regular button-primary font-label-secondary text-label-secondary disabled:opacity-40 disabled:cursor-not-allowed">Create</button>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Habits list */}
+                      <div className="space-y-3">
+                        {habits.length === 0 && !showAddHabit && (
+                          <div className="text-center py-8 text-text-secondary text-sm">
+                            No habits yet. Click "Add Habit" to get started.
+                          </div>
+                        )}
+                        {habits.map((habit) => {
+                          const isExpanded = expandedHabitIds.has(habit.id);
+                          const isEditing = editingHabitId === habit.id;
+                          const streak = getStreakCount(habit.tracking);
+                          const completion = getCompletionRate(habit.tracking);
+                          const totalTracked = Object.values(habit.tracking).filter((s) => s !== "upcoming").length;
+                          return (
+                            <div key={habit.id} className="rounded-xl border border-border-subtle bg-surface-container-low overflow-hidden transition-all duration-200">
+                              {/* Habit row */}
+                              <div className="flex items-center gap-3 px-4 py-3">
+                                <div
+                                  className="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 text-lg"
+                                  style={{ backgroundColor: `${habit.color}20`, border: `1px solid ${habit.color}40` }}
+                                >
+                                  {habit.emoji}
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  {isEditing ? (
+                                    <input
+                                      type="text"
+                                      value={editHabitName}
+                                      onChange={(e) => setEditHabitName(e.target.value)}
+                                      className="w-full bg-surface-white border border-border-subtle rounded-md px-2 py-1 text-sm text-on-surface focus:outline-none focus:ring-1 focus:ring-primary"
+                                      autoFocus
+                                      onKeyDown={(e) => { if (e.key === "Enter") handleEditHabit(habit.id); if (e.key === "Escape") setEditingHabitId(null); }}
+                                    />
+                                  ) : (
+                                    <div className="font-body-main text-body-main text-on-surface font-medium truncate">{habit.name}</div>
+                                  )}
+                                  <div className="flex items-center gap-2 mt-0.5">
+                                    <span className="text-xs text-text-secondary">{streak} day streak</span>
+                                    {totalTracked > 0 && (
+                                      <>
+                                        <span className="text-text-muted text-xs">·</span>
+                                        <span className="text-xs text-text-secondary">{completion}% completion</span>
+                                      </>
+                                    )}
+                                  </div>
+                                </div>
+                                <button
+                                  onClick={() => toggleHabitExpand(habit.id)}
+                                  className="icon-button text-text-secondary hover:text-primary transition-colors p-1 rounded-full hover:bg-surface-container"
+                                  aria-label={isExpanded ? "Collapse" : "Expand"}
+                                >
+                                  <span className={`material-symbols-outlined text-[16px] transition-transform duration-200 ${isExpanded ? "rotate-180" : ""}`}>expand_more</span>
+                                </button>
+                                {!isEditing && (
+                                  <button
+                                    onClick={() => startEditHabit(habit)}
+                                    className="icon-button text-text-muted hover:text-primary transition-colors p-1 rounded-full hover:bg-surface-container"
+                                    aria-label="Edit habit"
+                                  >
+                                    <span className="material-symbols-outlined text-[16px]">edit</span>
+                                  </button>
+                                )}
+                                <button
+                                  onClick={() => deleteHabit(habit.id)}
+                                  className="icon-button text-text-muted hover:text-error transition-colors p-1 rounded-full hover:bg-surface-container"
+                                  aria-label="Delete habit"
+                                >
+                                  <span className="material-symbols-outlined text-[16px]">delete</span>
+                                </button>
+                              </div>
+
+                              {/* Expanded details */}
+                              <div
+                                className="overflow-hidden transition-all duration-300 ease-in-out"
+                                style={{
+                                  maxHeight: isExpanded ? '600px' : '0',
+                                  opacity: isExpanded ? 1 : 0,
+                                  borderTopWidth: isExpanded ? '1px' : '0',
+                                  borderColor: 'var(--border-subtle, #E9E9E5)',
+                                }}
+                              >
+                                <div className="px-4 py-3 space-y-3">
+                                  {isEditing ? (
+                                    <>
+                                      <div>
+                                        <label className="text-xs font-medium text-text-secondary mb-1.5 block">Emoji</label>
+                                        <div className="flex flex-wrap gap-1.5">
+                                          {EMOJIS.map((emoji) => (
+                                            <button
+                                              key={emoji}
+                                              type="button"
+                                              onClick={() => setEditHabitEmoji(emoji)}
+                                              className={`w-8 h-8 rounded-lg flex items-center justify-center text-base transition-all duration-150 ${editHabitEmoji === emoji ? "bg-primary-container ring-2 ring-primary scale-110" : "bg-surface-white border border-border-subtle hover:bg-surface-container"}`}
+                                            >
+                                              {emoji}
+                                            </button>
+                                          ))}
+                                        </div>
+                                      </div>
+                                      <div>
+                                        <label className="text-xs font-medium text-text-secondary mb-1.5 block">Color</label>
+                                        <div className="flex flex-wrap gap-1.5">
+                                          {HABIT_COLORS.map((color) => (
+                                            <button
+                                              key={color}
+                                              type="button"
+                                              onClick={() => setEditHabitColor(color)}
+                                              className="w-7 h-7 rounded-full transition-all duration-150 flex items-center justify-center"
+                                              style={{
+                                                backgroundColor: color,
+                                                outline: editHabitColor === color ? `2px solid ${color}` : "2px solid transparent",
+                                                outlineOffset: "2px",
+                                                transform: editHabitColor === color ? "scale(1.15)" : "scale(1)",
+                                              }}
+                                            >
+                                              {editHabitColor === color && (
+                                                <span className="material-symbols-outlined text-white text-[14px]" style={{ fontVariationSettings: "'FILL' 1" }}>check</span>
+                                              )}
+                                            </button>
+                                          ))}
+                                        </div>
+                                      </div>
+                                      <div className="flex gap-2 pt-1">
+                                        <button onClick={() => setEditingHabitId(null)} className="button-regular button-secondary font-label-secondary text-label-secondary text-xs">Cancel</button>
+                                        <button onClick={() => handleEditHabit(habit.id)} disabled={!editHabitName.trim()} className="button-regular button-primary font-label-secondary text-label-secondary text-xs disabled:opacity-40 disabled:cursor-not-allowed">Save</button>
+                                      </div>
+                                    </>
+                                  ) : (
+                                    <div className="space-y-2">
+                                      <div className="flex items-center justify-between text-sm">
+                                        <span className="text-text-secondary">Color</span>
+                                        <div className="flex items-center gap-2">
+                                          <div className="w-4 h-4 rounded-full" style={{ backgroundColor: habit.color }} />
+                                          <span className="text-on-surface font-medium">{habit.color}</span>
+                                        </div>
+                                      </div>
+                                      <div className="flex items-center justify-between text-sm">
+                                        <span className="text-text-secondary">Total tracked days</span>
+                                        <span className="text-on-surface font-medium">{totalTracked}</span>
+                                      </div>
+                                      <div className="flex items-center justify-between text-sm">
+                                        <span className="text-text-secondary">Best streak</span>
+                                        <span className="text-on-surface font-medium">{streak} days</span>
+                                      </div>
+                                      {/* Monthly tracking grid */}
+                                      <div>
+                                        <span className="text-text-secondary text-sm block mb-2">This Month</span>
+                                        <div className="grid gap-1.5 w-max" style={{ gridTemplateColumns: 'repeat(7, 20px)' }}>
+                                          {(() => {
+                                            const dates: string[] = [];
+                                            const today = new Date();
+                                            for (let i = -34; i <= 0; i++) {
+                                              const d = new Date(today);
+                                              d.setDate(d.getDate() + i);
+                                              dates.push(d.toISOString().split("T")[0]!);
+                                            }
+                                            return dates.map((dateStr) => {
+                                              const status = habit.tracking[dateStr] || "upcoming";
+                                              const habitColor = habit.color || "#94c7a4";
+                                              const d = new Date(dateStr + "T00:00:00");
+                                              const label = d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+                                              return (
+                                                <div
+                                                  key={dateStr}
+                                                  className="transition-transform duration-150"
+                                                  style={{
+                                                    width: '20px',
+                                                    height: '20px',
+                                                    borderRadius: '50%',
+                                                    border: status === "done" ? `2px solid ${habitColor}` : '2px solid #aeb3b0',
+                                                    backgroundColor: status === "done" ? habitColor : 'transparent',
+                                                  }}
+                                                  title={`${label}: ${status}`}
+                                                />
+                                              );
+                                            });
+                                          })()}
+                                        </div>
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
                       </div>
                     </div>
                   </div>

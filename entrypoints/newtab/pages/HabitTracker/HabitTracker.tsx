@@ -393,15 +393,15 @@ export default function HabitTracker() {
                               role="region"
                               aria-label={`Monthly view for ${habit.name}`}
                             >
-                              <div className="rounded-xl border border-[#e5e5e5] p-4 bg-white" style={{ borderRadius: '12px' }}>
-                                <div className="flex items-center justify-between mb-2">
-                                  <span style={{ fontSize: '12px', fontWeight: 500, letterSpacing: '1px', color: '#858585' }}>THIS MONTH</span>
-                                  <div className="flex items-center gap-1">
-                                    <button onClick={() => startEditHabit(habit)} className="p-1.5 rounded-full hover:bg-[#f0f0f0] transition-colors" aria-label="Edit habit">
-                                      <span className="material-symbols-outlined text-[18px]" aria-hidden="true">edit</span>
+                              <div className="rounded-xl border border-[#e5e5e5] bg-white" style={{ borderRadius: '12px', padding: '14px 16px' }}>
+                                <div className="flex items-center justify-between mb-3">
+                                  <span style={{ fontSize: '11px', fontWeight: 600, letterSpacing: '1.5px', color: '#999' }}>THIS MONTH</span>
+                                  <div className="flex items-center gap-0.5">
+                                    <button onClick={() => startEditHabit(habit)} className="p-1 rounded-md hover:bg-[#f0f0f0] transition-colors" aria-label="Edit habit">
+                                      <span className="material-symbols-outlined text-[16px] text-[#999]" aria-hidden="true">edit</span>
                                     </button>
-                                    <button onClick={() => handleDeleteHabit(habit.id)} className="p-1.5 rounded-full hover:bg-[#f0f0f0] transition-colors" aria-label="Delete habit">
-                                      <span className="material-symbols-outlined text-[18px]" aria-hidden="true">delete</span>
+                                    <button onClick={() => handleDeleteHabit(habit.id)} className="p-1 rounded-md hover:bg-[#f0f0f0] transition-colors" aria-label="Delete habit">
+                                      <span className="material-symbols-outlined text-[16px] text-[#999]" aria-hidden="true">delete</span>
                                     </button>
                                   </div>
                                 </div>
@@ -420,27 +420,49 @@ export default function HabitTracker() {
                                     "Save"
                                   )
                                 ) : (
-                                  <div className="grid gap-1.5 w-max" style={{ gridTemplateColumns: 'repeat(7, 20px)' }}>
-                                    {monthlyDates.map((dateStr) => {
-                                      const status = habit.tracking[dateStr] || "upcoming";
-                                      const habitColor = habit.color || "#94c7a4";
-                                      return (
-                                        <button
-                                          key={dateStr}
-                                          onClick={() => toggleHabitDate(habit.id, dateStr)}
-                                          className="cursor-pointer hover:scale-110 transition-transform duration-150"
-                                          style={{
-                                            width: '20px',
-                                            height: '20px',
-                                            borderRadius: '50%',
-                                            border: status === "done" ? `2px solid ${habitColor}` : '2px solid #aeb3b0',
-                                            backgroundColor: status === "done" ? habitColor : 'transparent',
-                                          }}
-                                          aria-label={`${getMonthDayLabel(dateStr)}: ${status}`}
-                                          title={getMonthDayLabel(dateStr)}
-                                        />
-                                      );
-                                    })}
+                                  <div>
+                                    <div className="grid gap-x-[6px] gap-y-[5px] w-max" style={{ gridTemplateColumns: 'repeat(7, 16px)' }}>
+                                      {["S","M","T","W","T","F","S"].map((d, i) => (
+                                        <div key={i} className="flex items-center justify-center" style={{ fontSize: '9px', fontWeight: 600, color: '#bbb', letterSpacing: '0.5px' }}>
+                                          {d}
+                                        </div>
+                                      ))}
+                                      {monthlyDates.map((dateStr) => {
+                                        const status = habit.tracking[dateStr] || "upcoming";
+                                        const habitColor = habit.color || "#94c7a4";
+                                        return (
+                                          <button
+                                            key={dateStr}
+                                            onClick={() => toggleHabitDate(habit.id, dateStr)}
+                                            className="cursor-pointer hover:scale-125 transition-transform duration-150"
+                                            style={{
+                                              width: '16px',
+                                              height: '16px',
+                                              borderRadius: '50%',
+                                              border: status === "done" ? `2px solid ${habitColor}` : status === "missed" ? '2px solid #d8d8d8' : '2px solid #eaeaea',
+                                              backgroundColor: status === "done" ? habitColor : status === "missed" ? '#f0f0f0' : 'transparent',
+                                            }}
+                                            aria-label={`${getMonthDayLabel(dateStr)}: ${status}`}
+                                            title={`${getMonthDayLabel(dateStr)}: ${status}`}
+                                          />
+                                        );
+                                      })}
+                                    </div>
+                                    {/* Legend */}
+                                    <div className="flex items-center gap-3 mt-3 pt-2.5 border-t border-[#f0f0f0]">
+                                      <div className="flex items-center gap-1.5">
+                                        <div style={{ width: '8px', height: '8px', borderRadius: '50%', border: `2px solid ${habit.color || "#94c7a4"}`, backgroundColor: habit.color || "#94c7a4" }} />
+                                        <span style={{ fontSize: '10px', color: '#999' }}>Done</span>
+                                      </div>
+                                      <div className="flex items-center gap-1.5">
+                                        <div style={{ width: '8px', height: '8px', borderRadius: '50%', border: '2px solid #d8d8d8', backgroundColor: '#f0f0f0' }} />
+                                        <span style={{ fontSize: '10px', color: '#999' }}>Missed</span>
+                                      </div>
+                                      <div className="flex items-center gap-1.5">
+                                        <div style={{ width: '8px', height: '8px', borderRadius: '50%', border: '2px solid #eaeaea', backgroundColor: 'transparent' }} />
+                                        <span style={{ fontSize: '10px', color: '#999' }}>Upcoming</span>
+                                      </div>
+                                    </div>
                                   </div>
                                 )}
                               </div>
@@ -456,11 +478,13 @@ export default function HabitTracker() {
                 <div style={{ marginTop: '14px', paddingLeft: '12px' }}>
                   <button
                     onClick={() => setShowCreatePanel(true)}
-                    className="flex items-center gap-3 transition-colors cursor-pointer hover:opacity-70"
-                    style={{ height: '58px', fontSize: '14px', color: '#292929' }}
+                    className="flex items-center gap-3 transition-colors duration-150 cursor-pointer group rounded-lg"
+                    style={{ height: '50px', paddingInline: '12px', fontSize: '14px', color: '#292929' }}
+                    onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#f0f0f0')}
+                    onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
                     aria-label="Add new habit"
                   >
-                    <span style={{ fontSize: '27px', fontWeight: 300, lineHeight: 1 }}>+</span>
+                    <span className="transition-transform duration-200 group-hover:rotate-90 group-hover:scale-110" style={{ fontSize: '27px', fontWeight: 300, lineHeight: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', width: '24px', height: '24px' }}>+</span>
                     <span style={{ fontWeight: 500 }}>Add habit</span>
                   </button>
                 </div>
