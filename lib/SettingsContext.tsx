@@ -41,6 +41,7 @@ export interface Habit {
   id: string;
   name: string;
   emoji: string;
+  color: string;
   tracking: Record<string, "done" | "missed" | "upcoming">;
 }
 
@@ -135,24 +136,28 @@ const DEFAULT_HABITS: Habit[] = [
     id: "1",
     name: "Read 20 minutes",
     emoji: "📚",
+    color: "#94c7a4",
     tracking: generateInitialTracking(35),
   },
   {
     id: "2",
     name: "Morning workout",
     emoji: "💪",
+    color: "#94c7a4",
     tracking: generateInitialTracking(35),
   },
   {
     id: "3",
     name: "Japanese practice",
     emoji: "🇯🇵",
+    color: "#94c7a4",
     tracking: generateInitialTracking(35),
   },
   {
     id: "4",
     name: "No sugar",
     emoji: "🚫",
+    color: "#94c7a4",
     tracking: generateInitialTracking(35),
   },
 ];
@@ -258,7 +263,13 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
         if (Array.isArray(parsed) && parsed.length > 0) {
           // Migrate old habit format (weeklyProgress/monthlyData) to new format (tracking)
           const migrated = parsed.map((h: any) => {
-            if (h.tracking) return h; // already new format
+            if (h.tracking) {
+              // Already new format, ensure color exists
+              if (!h.color) {
+                return { ...h, color: "#94c7a4" };
+              }
+              return h;
+            }
             const tracking: Record<string, "done" | "missed" | "upcoming"> = {};
             const today = new Date();
             // weeklyProgress: last 7 days
@@ -288,7 +299,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
               const dateStr = date.toISOString().split("T")[0]!;
               if (!tracking[dateStr]) tracking[dateStr] = "upcoming";
             }
-            return { ...h, tracking };
+            return { ...h, tracking, color: h.color || "#94c7a4" };
           });
           setHabits(migrated);
         }
@@ -506,6 +517,7 @@ useEffect(() => {
   const addHabit = (habit: Omit<Habit, "id">) => {
     const newHabit: Habit = {
       ...habit,
+      color: habit.color || "#94c7a4",
       id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
     };
     setHabits((prev) => [...prev, newHabit]);
