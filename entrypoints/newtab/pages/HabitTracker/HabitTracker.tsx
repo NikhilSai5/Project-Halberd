@@ -2,8 +2,13 @@
 
 import { useState, useRef, useEffect, useMemo } from "react";
 import { useSettings, type Habit } from '@/lib/SettingsContext';
+import AnimatedEmoji from '@/components/AnimatedEmoji';
 
-const EMOJIS = ["📚", "💪", "🇯🇵", "🚫", "🧘", "🏃", "💧", "🥗", "🌙", "☀️", "🎯", "📝", "🎨", "🎵", "🌱", "✨"];
+const EMOJIS = [
+  "📚", "💪", "🔥", "⚡", "💧", "🎯", "🏆", "✨",
+  "🌱", "🥗", "🍎", "☕", "🧠", "⏰", "🚀", "✍️",
+  "🎵", "☀️", "🌙", "👟", "🚫", "🎉"
+];
 
 const HABIT_COLORS = [
   "#94c7a4", "#6bb3d6", "#d6a66b", "#d66b6b", "#b36bd6", "#6bd6b3",
@@ -64,7 +69,7 @@ const EmojiPicker = ({
         aria-label={emoji}
         aria-pressed={selected === emoji}
       >
-        {emoji}
+        <AnimatedEmoji emoji={emoji} size={22} />
       </button>
     ))}
   </div>
@@ -327,8 +332,8 @@ export default function HabitTracker() {
                           <div className="flex items-center" style={{ minHeight: '72px' }}>
                             {/* Icon + Name */}
                             <div className="flex items-center gap-4 flex-1 min-w-0" style={{ gap: '16px' }}>
-                              <div className="flex-shrink-0 flex items-center justify-center" style={{ width: '46px', height: '46px', border: '1px solid #d8d8d8', borderRadius: '9px', fontSize: '23px', color: '#292929' }}>
-                                {habit.emoji}
+                              <div className="flex-shrink-0 flex items-center justify-center overflow-hidden" style={{ width: '46px', height: '46px', border: '1px solid #d8d8d8', borderRadius: '9px', fontSize: '23px', color: '#292929', backgroundColor: '#fafafa' }}>
+                                <AnimatedEmoji emoji={habit.emoji} size={25} />
                               </div>
                               <div className="min-w-0">
                                 <p className="truncate" style={{ fontSize: '14px', fontWeight: 500, color: '#292929', margin: '0 0 5px' }}>{habit.name}</p>

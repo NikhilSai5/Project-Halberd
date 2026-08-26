@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef, useCallback, useContext } from "react";
 import { SettingsContext, type Habit } from "@/lib/SettingsContext";
+import AnimatedEmoji from "@/components/AnimatedEmoji";
 import { browser } from "wxt/browser";
 
 const STORAGE_KEY = "halberd_floating_circle_pos";
@@ -528,10 +529,8 @@ export default function FloatingCircle() {
         onMouseLeave={() => setIsHovered(false)}
         title={nativeTitle}
       >
-        <span
+        <div
           style={{
-            fontSize: "24px",
-            lineHeight: "1",
             pointerEvents: "none",
             userSelect: "none",
             WebkitUserSelect: "none",
@@ -548,8 +547,8 @@ export default function FloatingCircle() {
             transition: "transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.2s ease",
           }}
         >
-          {displayEmoji}
-        </span>
+          <AnimatedEmoji emoji={displayEmoji} size={30} />
+        </div>
       </div>
     </div>
   );
