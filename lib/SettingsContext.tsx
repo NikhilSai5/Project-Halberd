@@ -1,6 +1,7 @@
 "use client";
 
 import { createContext, useContext, useState, useEffect, type ReactNode } from "react";
+import { browser } from "wxt/browser";
 import {
   getWallpapers,
   addWallpaperToDB,
@@ -112,7 +113,7 @@ interface SettingsContextType {
   clearProductiveSessions: (weeklyGoalId?: string) => Promise<void>;
 }
 
-const SettingsContext = createContext<SettingsContextType | undefined>(undefined);
+export const SettingsContext = createContext<SettingsContextType | undefined>(undefined);
 
 const DEFAULT_GROUPS: TodoGroup[] = [
   { id: "1", name: "Personal", todos: [] },
@@ -398,6 +399,11 @@ useEffect(() => {
   useEffect(() => {
     if (!initialized) return;
     localStorage.setItem("habits", JSON.stringify(habits));
+    try {
+      if (browser?.storage?.local) {
+        browser.storage.local.set({ halberd_habits: habits }).catch(() => {});
+      }
+    } catch {}
   }, [habits, initialized]);
 
   useEffect(() => {

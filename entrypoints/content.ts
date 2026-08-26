@@ -1,5 +1,5 @@
 import { defineContentScript } from 'wxt/utils/define-content-script';
-import { createShadowRootUi } from 'wxt/utils/content-script-ui/shadow-root';
+import { browser } from 'wxt/browser';
 import ReactDOM from 'react-dom/client';
 import React from 'react';
 import FloatingCircle from '@/components/FloatingCircle';
@@ -29,7 +29,7 @@ function extractPageContent(): PageContent {
 
   return {
     url: window.location.href,
-    title: document.title.trim(),
+    title: document.title?.trim() ?? '',
     headings,
     bodyText,
     metaDescription: document.querySelector('meta[name="description"]')?.getAttribute('content')?.trim() ?? '',
@@ -37,58 +37,59 @@ function extractPageContent(): PageContent {
   };
 }
 
+function mountFloatingCircle() {
+  // 1. Only mount in top-level window (not nested iframes)
+  if (window.self !== window.top) return;
+
+  // 2. Prevent duplicate mounts
+  if (document.getElementById('halberd-floating-circle-host')) return;
+
+  const target = document.documentElement || document.body;
+  if (!target) return;
+
+  try {
+    const host = document.createElement('div');
+    host.id = 'halberd-floating-circle-host';
+    host.style.cssText =
+      'position: fixed !important; top: 0 !important; left: 0 !important; width: 0 !important; height: 0 !important; overflow: visible !important; z-index: 2147483647 !important; pointer-events: none !important; border: none !important; margin: 0 !important; padding: 0 !important;';
+
+    const shadow = host.attachShadow({ mode: 'open' });
+    const container = document.createElement('div');
+    container.id = 'halberd-floating-root';
+    container.style.cssText =
+      'position: fixed !important; top: 0 !important; left: 0 !important; width: 0 !important; height: 0 !important; overflow: visible !important; pointer-events: none !important; border: none !important; margin: 0 !important; padding: 0 !important;';
+
+    shadow.appendChild(container);
+    target.appendChild(host);
+
+    const root = ReactDOM.createRoot(container);
+    root.render(React.createElement(FloatingCircle));
+  } catch (err) {
+    console.error('[Halberd] Error mounting floating circle:', err);
+  }
+}
+
 export default defineContentScript({
   matches: ['<all_urls>'],
   runAt: 'document_idle',
-  async main(ctx) {
-    // 1. Listen for background page content extraction
-    browser.runtime.onMessage.addListener((message) => {
-      if (message?.type !== 'EXTRACT_CONTENT') return;
-      return Promise.resolve({ type: 'CONTENT_EXTRACTED', content: extractPageContent() });
-    });
-
-    // 2. Prevent mounting inside nested iframes (only mount in top-level window)
-    if (window.self !== window.top) {
-      return;
-    }
-
-    // 3. Avoid duplicate mounts if already present
-    if (document.querySelector('halberd-floating-circle-host')) {
-      return;
-    }
-
-    // 4. Mount floating circle in isolated Shadow DOM
+  main() {
+    // Listen for background page content extraction
     try {
-      const anchorElement = document.body || document.documentElement;
-      const ui = await createShadowRootUi(ctx, {
-        name: 'halberd-floating-circle-host',
-        position: 'inline',
-        anchor: anchorElement,
-        append: 'last',
-        onMount(container, shadow, shadowHost) {
-          // Ensure shadow host and container have top-level z-index and don't block clicks
-          shadowHost.style.cssText =
-            'position: fixed !important; top: 0 !important; left: 0 !important; width: 0 !important; height: 0 !important; overflow: visible !important; z-index: 2147483647 !important; pointer-events: none !important; border: none !important; margin: 0 !important; padding: 0 !important;';
-          container.style.cssText =
-            'position: fixed !important; top: 0 !important; left: 0 !important; width: 0 !important; height: 0 !important; overflow: visible !important; pointer-events: none !important; border: none !important; margin: 0 !important; padding: 0 !important;';
+      if (browser?.runtime?.onMessage) {
+        browser.runtime.onMessage.addListener((message) => {
+          if (message?.type !== 'EXTRACT_CONTENT') return;
+          return Promise.resolve({ type: 'CONTENT_EXTRACTED', content: extractPageContent() });
+        });
+      }
+    } catch {
+      // Ignored
+    }
 
-          const app = document.createElement('div');
-          app.id = 'halberd-floating-root';
-          app.style.cssText = 'pointer-events: none;';
-          container.append(app);
-
-          const root = ReactDOM.createRoot(app);
-          root.render(React.createElement(FloatingCircle));
-          return root;
-        },
-        onRemove(root) {
-          root?.unmount();
-        },
-      });
-
-      ui.mount();
-    } catch (err) {
-      console.error('[Halberd] Error mounting floating circle content script UI:', err);
+    // Mount immediately or once DOM is interactive
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', mountFloatingCircle);
+    } else {
+      mountFloatingCircle();
     }
   },
 });
