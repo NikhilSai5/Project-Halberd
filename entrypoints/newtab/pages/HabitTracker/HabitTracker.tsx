@@ -3,6 +3,8 @@
 import { useState, useRef, useEffect, useMemo } from "react";
 import { useSettings, type Habit } from '@/lib/SettingsContext';
 import AnimatedEmoji from '@/components/AnimatedEmoji';
+import EmojiPicker, { SkinTonePickerLocation } from 'emoji-picker-react';
+import type { EmojiClickData } from 'emoji-picker-react';
 
 const EMOJIS = [
   "📚", "💪", "🔥", "⚡", "💧", "🎯", "🏆", "✨",
@@ -48,30 +50,45 @@ function getStreakCount(tracking: Record<string, "done" | "missed" | "upcoming">
   return streak;
 }
 
-const EmojiPicker = ({
+const EmojiPickerPanel = ({
   selected,
   onSelect,
 }: {
   selected: string;
   onSelect: (emoji: string) => void;
 }) => (
-  <div className="flex flex-wrap gap-2">
-    {EMOJIS.map((emoji) => (
-      <button
-        key={emoji}
-        type="button"
-        onClick={() => onSelect(emoji)}
-        className={`w-10 h-10 rounded-full text-2xl flex items-center justify-center transition-all duration-200 ${
-          selected === emoji
-            ? "ring-2 ring-[#94c7a4] ring-offset-2 ring-offset-white scale-110 shadow-md"
-            : "bg-white hover:bg-[#f5f5f5] border border-[#e5e5e5]"
-        }`}
-        aria-label={emoji}
-        aria-pressed={selected === emoji}
-      >
-        <AnimatedEmoji emoji={emoji} size={22} />
-      </button>
-    ))}
+  <div>
+    <div className="flex flex-wrap gap-2">
+      {EMOJIS.map((emoji) => (
+        <button
+          key={emoji}
+          type="button"
+          onClick={() => onSelect(emoji)}
+          className={`w-10 h-10 rounded-full text-2xl flex items-center justify-center transition-all duration-200 ${
+            selected === emoji
+              ? "ring-2 ring-[#94c7a4] ring-offset-2 ring-offset-white scale-110 shadow-md"
+              : "bg-white hover:bg-[#f5f5f5] border border-[#e5e5e5]"
+          }`}
+          aria-label={emoji}
+          aria-pressed={selected === emoji}
+        >
+          <AnimatedEmoji emoji={emoji} size={22} />
+        </button>
+      ))}
+    </div>
+    <div className="mt-3 pt-3 border-t border-[#e5e5e5]">
+      <p className="mb-2 text-[11px] font-medium text-[#999]" style={{ letterSpacing: '0.5px' }}>OR PICK ANY EMOJI</p>
+      <div style={{ maxWidth: '350px' }}>
+        <EmojiPicker
+          onEmojiClick={(data: EmojiClickData) => onSelect(data.emoji)}
+          theme={"light" as any}
+          width="100%"
+          height={350}
+          lazyLoadEmojis
+          skinTonePickerLocation={SkinTonePickerLocation.SEARCH}
+        />
+      </div>
+    </div>
   </div>
 );
 
@@ -275,7 +292,7 @@ export default function HabitTracker() {
       </div>
       <div>
         <label className="block mb-2 text-[13px] font-medium text-[#555]" style={{ letterSpacing: '0.5px' }}>Emoji</label>
-        <EmojiPicker selected={emoji} onSelect={setEmoji} />
+        <EmojiPickerPanel selected={emoji} onSelect={setEmoji} />
       </div>
       <div>
         <label className="block mb-2 text-[13px] font-medium text-[#555]" style={{ letterSpacing: '0.5px' }}>Color</label>
@@ -303,7 +320,24 @@ export default function HabitTracker() {
 
           {/* Content */}
           <div style={{ padding: '21px 25px 17px' }}>
-            {!showCreatePanel ? (
+            {editingHabit ? (
+              /* Edit habit panel */
+              <div className="animate-fade-in">
+                <p style={{ fontSize: '13px', color: '#858585', fontWeight: 500, letterSpacing: '1px', margin: '0 0 17px' }}>EDIT HABIT</p>
+                {renderHabitForm(
+                  editingHabit,
+                  editHabitName,
+                  setEditHabitName,
+                  editHabitEmoji,
+                  setEditHabitEmoji,
+                  editHabitColor,
+                  setEditHabitColor,
+                  handleEditHabit,
+                  handleCancelEdit,
+                  "Save"
+                )}
+              </div>
+            ) : !showCreatePanel ? (
               <>
                 <p style={{ fontSize: '13px', color: '#858585', fontWeight: 500, letterSpacing: '1px', margin: '0 0 17px' }}>THIS WEEK</p>
 
@@ -325,7 +359,6 @@ export default function HabitTracker() {
                     {habits.map((habit) => {
                       const isExpanded = expandedHabit === habit.id;
                       const isClosing = closingHabit === habit.id;
-                      const isEditing = editingHabit === habit.id;
                       return (
                         <div key={habit.id} className="relative" style={{ borderBottom: '1px solid #e5e5e5' }}>
                           {/* Habit row */}
@@ -393,7 +426,7 @@ export default function HabitTracker() {
                           {(isExpanded || isClosing) && (
                             <div
                               className={`${isClosing ? 'animate-slide-up' : 'animate-slide-down'} z-10`}
-                              style={{ marginTop: '8px', marginBottom: '4px' }}
+                              style={{ marginTop: '8px', marginBottom: '4px', overflow: 'scroll', scrollbarWidth: 'none', msOverflowStyle: 'none' }}
                               onAnimationEnd={() => handleClosingAnimationEnd(habit.id)}
                               role="region"
                               aria-label={`Monthly view for ${habit.name}`}
@@ -411,21 +444,7 @@ export default function HabitTracker() {
                                   </div>
                                 </div>
 
-                                {isEditing ? (
-                                  renderHabitForm(
-                                    habit.id,
-                                    editHabitName,
-                                    setEditHabitName,
-                                    editHabitEmoji,
-                                    setEditHabitEmoji,
-                                    editHabitColor,
-                                    setEditHabitColor,
-                                    handleEditHabit,
-                                    handleCancelEdit,
-                                    "Save"
-                                  )
-                                ) : (
-                                  <div>
+                                <div>
                                     <div className="grid gap-x-[6px] gap-y-[5px] w-max" style={{ gridTemplateColumns: 'repeat(7, 16px)' }}>
                                       {["S","M","T","W","T","F","S"].map((d, i) => (
                                         <div key={i} className="flex items-center justify-center" style={{ fontSize: '9px', fontWeight: 600, color: '#bbb', letterSpacing: '0.5px' }}>
@@ -469,7 +488,6 @@ export default function HabitTracker() {
                                       </div>
                                     </div>
                                   </div>
-                                )}
                               </div>
                             </div>
                           )}
@@ -514,7 +532,7 @@ export default function HabitTracker() {
                   </div>
                   <div style={{ marginBottom: '16px' }}>
                     <label className="block mb-2 text-[13px] font-medium text-[#555]" style={{ letterSpacing: '0.5px' }}>Emoji</label>
-                    <EmojiPicker selected={newHabitEmoji} onSelect={setNewHabitEmoji} />
+                    <EmojiPickerPanel selected={newHabitEmoji} onSelect={setNewHabitEmoji} />
                   </div>
                   <div style={{ marginBottom: '16px' }}>
                     <label className="block mb-2 text-[13px] font-medium text-[#555]" style={{ letterSpacing: '0.5px' }}>Color</label>

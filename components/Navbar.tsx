@@ -2,6 +2,11 @@
 
 import { useState, useEffect } from "react";
 
+
+export const MyAnimation: React.FC = () => {
+  return <AnimatedEmoji emoji="blush" />;
+};
+
 interface NavItem {
   icon: string;
   label: string;
@@ -195,7 +200,7 @@ export default function Navbar({ activeItem, navItems = defaultNavItems, onNavCl
           <div className="dock-meta dock-meta--right mb-4 text-center px-2">
             <div className="flex items-center justify-center gap-1 mb-2">
               <span className="material-symbols-outlined text-[18px] text-white" aria-hidden="true">light_mode</span>
-              <span className="font-label-secondary text-label-secondary text-white">24°</span>
+              <span className="font-label-secondary text-label-secondary text-white">24° </span>
             </div>
             <span className="material-symbols-outlined text-[20px] opacity-50 text-white" aria-hidden="true">pets</span>
           </div>

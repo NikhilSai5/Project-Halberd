@@ -16,6 +16,7 @@
   },
   "dependencies": {
     "@remotion/animated-emoji": "4.0.517",
+    "emoji-picker-react": "^4.19.1",
     "idb": "^8.0.3",
     "react": "^19.2.4",
     "react-dom": "^19.2.4"
