@@ -81,6 +81,7 @@ interface SettingsContextType {
   updateHabit: (habitId: string, updates: Partial<Habit>) => void;
   deleteHabit: (habitId: string) => void;
   toggleHabitDate: (habitId: string, date: string) => void;
+  markHabitDone: (habitId: string, date: string) => void;
   wallpapers: WallpaperFile[];
   setWallpapers: (wallpapers: WallpaperFile[]) => void;
   addWallpaper: (wallpaper: WallpaperFile) => void;
@@ -378,7 +379,34 @@ useEffect(() => {
 
     getProductiveSessions().then(setProductiveSessions).catch(() => {});
 
+    // Listen to habit updates from external tabs
+    const handleStorageChange = (
+      changes: Record<string, { oldValue?: any; newValue?: any }>,
+      areaName?: string
+    ) => {
+      if ((!areaName || areaName === "local") && changes["halberd_habits"]?.newValue) {
+        const newHabits = changes["halberd_habits"].newValue as Habit[];
+        if (Array.isArray(newHabits)) {
+          setHabits(newHabits);
+        }
+      }
+    };
+
+    try {
+      if (browser?.storage?.onChanged) {
+        browser.storage.onChanged.addListener(handleStorageChange);
+      }
+    } catch {}
+
     setInitialized(true);
+
+    return () => {
+      try {
+        if (browser?.storage?.onChanged) {
+          browser.storage.onChanged.removeListener(handleStorageChange);
+        }
+      } catch {}
+    };
   }, []);
 
   useEffect(() => {
@@ -550,6 +578,21 @@ useEffect(() => {
     );
   };
 
+  const markHabitDone = (habitId: string, date: string) => {
+    setHabits((prev) => {
+      const updated = prev.map((h) => {
+        if (h.id !== habitId) return h;
+        return { ...h, tracking: { ...h.tracking, [date]: "done" as const } };
+      });
+      try {
+        if (browser?.storage?.local) {
+          browser.storage.local.set({ halberd_habits: updated }).catch(() => {});
+        }
+      } catch {}
+      return updated;
+    });
+  };
+
   const addWallpaper = (wallpaper: WallpaperFile) => {
     setWallpapers((prev) => {
       if (prev.length === 0) {
@@ -659,6 +702,7 @@ useEffect(() => {
         updateHabit,
         deleteHabit,
         toggleHabitDate,
+        markHabitDone,
         wallpapers,
         setWallpapers,
         addWallpaper,

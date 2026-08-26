@@ -7,22 +7,62 @@ import { browser } from "wxt/browser";
 const STORAGE_KEY = "halberd_floating_circle_pos";
 const HABITS_STORAGE_KEY = "halberd_habits";
 const CIRCLE_SIZE = 54;
-const SLIDESHOW_INTERVAL = 6000; // 6 seconds per emoji, synced across all tabs
+const SLIDESHOW_INTERVAL = 6000; // 6 seconds per habit emoji, synced across all tabs
+const CONFIRM_TIMEOUT_MS = 5000; // 5 seconds to confirm before resetting
 const MARGIN = 16;
 
-const DEFAULT_HABIT_EMOJIS = ["📚", "💪", "🇯🇵", "🚫", "⚔️"];
+const DEFAULT_HABITS: Habit[] = [
+  {
+    id: "1",
+    name: "Read 20 minutes",
+    emoji: "📚",
+    color: "#94c7a4",
+    tracking: {},
+  },
+  {
+    id: "2",
+    name: "Morning workout",
+    emoji: "💪",
+    color: "#94c7a4",
+    tracking: {},
+  },
+  {
+    id: "3",
+    name: "Japanese practice",
+    emoji: "🇯🇵",
+    color: "#94c7a4",
+    tracking: {},
+  },
+  {
+    id: "4",
+    name: "No sugar",
+    emoji: "🚫",
+    color: "#94c7a4",
+    tracking: {},
+  },
+];
 
 interface Position {
   x: number;
   y: number;
 }
 
+// Local YYYY-MM-DD date string
+function getTodayDateStr(): string {
+  const d = new Date();
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
 export default function FloatingCircle() {
   const settingsContext = useContext(SettingsContext);
   const contextHabits = settingsContext?.habits;
 
-  const [storedHabits, setStoredHabits] = useState<Habit[]>([]);
+  const [storedHabits, setStoredHabits] = useState<Habit[]>(DEFAULT_HABITS);
   const [currentEmojiIndex, setCurrentEmojiIndex] = useState(0);
+  const [todayStr, setTodayStr] = useState<string>(getTodayDateStr());
 
   // Position state with default to top-right
   const [position, setPosition] = useState<Position>(() => {
@@ -37,23 +77,44 @@ export default function FloatingCircle() {
 
   const [isDragging, setIsDragging] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
-  const [isClicked, setIsClicked] = useState(false);
+  const [confirmingHabitId, setConfirmingHabitId] = useState<string | null>(null);
+  const [justCompletedHabit, setJustCompletedHabit] = useState<string | null>(null);
   const [isTransitioning, setIsTransitioning] = useState(false);
 
+  const confirmTimerRef = useRef<any>(null);
   const dragOffsetRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
   const startPosRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
   const isDraggingRef = useRef(false);
   const positionRef = useRef(position);
   positionRef.current = position;
 
-  // Active list of habits (from context if in New Tab, or from storage if on other websites)
-  const effectiveHabits = contextHabits && contextHabits.length > 0 ? contextHabits : storedHabits;
-  const emojiList =
-    effectiveHabits.length > 0
-      ? effectiveHabits.map((h) => h.emoji).filter(Boolean)
-      : DEFAULT_HABIT_EMOJIS;
+  // Active list of all habits
+  const allHabits = contextHabits && contextHabits.length > 0 ? contextHabits : storedHabits;
 
-  // Load habits from browser.storage when outside SettingsProvider
+  // Update todayStr when date changes (midnight roll)
+  useEffect(() => {
+    const checkDate = () => {
+      const current = getTodayDateStr();
+      setTodayStr((prev) => (prev !== current ? current : prev));
+    };
+    const interval = setInterval(checkDate, 60000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Filter out habits that are ALREADY marked as done for today
+  const pendingHabits = allHabits.filter((habit) => {
+    return habit.tracking?.[todayStr] !== "done";
+  });
+
+  // Reset confirmation mode if the confirming habit is no longer pending
+  useEffect(() => {
+    if (confirmingHabitId && !pendingHabits.some((h) => h.id === confirmingHabitId)) {
+      setConfirmingHabitId(null);
+      if (confirmTimerRef.current) clearTimeout(confirmTimerRef.current);
+    }
+  }, [confirmingHabitId, pendingHabits]);
+
+  // Load habits from browser.storage when outside SettingsProvider (e.g. content script on YouTube)
   useEffect(() => {
     if (contextHabits && contextHabits.length > 0) return;
 
@@ -104,14 +165,15 @@ export default function FloatingCircle() {
   }, [contextHabits]);
 
   // Wall-clock epoch synchronized slideshow across ALL tabs and pages
+  // Slideshow pauses while user is in confirmation mode
   useEffect(() => {
-    if (emojiList.length === 0) return;
+    if (pendingHabits.length === 0 || confirmingHabitId !== null) return;
 
     let timerId: any = null;
 
     const syncTick = () => {
       const now = Date.now();
-      const index = Math.floor(now / SLIDESHOW_INTERVAL) % emojiList.length;
+      const index = Math.floor(now / SLIDESHOW_INTERVAL) % pendingHabits.length;
 
       setCurrentEmojiIndex((prev) => {
         if (prev !== index) {
@@ -121,7 +183,6 @@ export default function FloatingCircle() {
         return index;
       });
 
-      // Calculate exact milliseconds until the next interval transition boundary
       const msUntilNext = SLIDESHOW_INTERVAL - (now % SLIDESHOW_INTERVAL);
       timerId = setTimeout(syncTick, Math.max(20, msUntilNext + 10));
     };
@@ -131,7 +192,7 @@ export default function FloatingCircle() {
     return () => {
       if (timerId) clearTimeout(timerId);
     };
-  }, [emojiList.length, emojiList.join("|")]);
+  }, [pendingHabits.length, pendingHabits.map((h) => h.id).join("|"), confirmingHabitId]);
 
   // Clamp position to viewport bounds
   const clampPosition = useCallback((x: number, y: number): Position => {
@@ -173,7 +234,7 @@ export default function FloatingCircle() {
 
     loadPosition();
 
-    // Listen for storage changes across tabs
+    // Listen for position changes from other tabs
     const handleStorageChange = (
       changes: Record<string, { oldValue?: any; newValue?: any }>,
       areaName?: string
@@ -208,8 +269,72 @@ export default function FloatingCircle() {
           browser.storage.onChanged.removeListener(handleStorageChange);
         }
       } catch {}
+      if (confirmTimerRef.current) {
+        clearTimeout(confirmTimerRef.current);
+      }
     };
   }, [clampPosition]);
+
+  // Current active habit (or the habit waiting for confirmation)
+  const currentHabit = confirmingHabitId
+    ? pendingHabits.find((h) => h.id === confirmingHabitId) || null
+    : pendingHabits.length > 0
+    ? pendingHabits[currentEmojiIndex % pendingHabits.length]
+    : null;
+
+  // Handle click with confirmation requirement
+  const handleHabitClick = () => {
+    if (!currentHabit) return;
+
+    // STEP 2: If already in confirmation mode for this habit, mark as complete!
+    if (confirmingHabitId === currentHabit.id) {
+      if (confirmTimerRef.current) clearTimeout(confirmTimerRef.current);
+      setConfirmingHabitId(null);
+
+      const habitToComplete = currentHabit;
+      const dateStr = todayStr;
+
+      // Show celebratory completed badge
+      setJustCompletedHabit(habitToComplete.name);
+      setTimeout(() => {
+        setJustCompletedHabit(null);
+      }, 1000);
+
+      // 1. Update in Context if in New Tab
+      if (settingsContext?.markHabitDone) {
+        settingsContext.markHabitDone(habitToComplete.id, dateStr);
+      }
+
+      // 2. Update local state & sync to browser.storage.local for other tabs
+      const updatedHabits = allHabits.map((h) => {
+        if (h.id !== habitToComplete.id) return h;
+        return {
+          ...h,
+          tracking: {
+            ...h.tracking,
+            [dateStr]: "done" as const,
+          },
+        };
+      });
+
+      setStoredHabits(updatedHabits);
+
+      try {
+        if (browser?.storage?.local) {
+          browser.storage.local.set({ [HABITS_STORAGE_KEY]: updatedHabits }).catch(() => {});
+        }
+      } catch {}
+      return;
+    }
+
+    // STEP 1: First click -> enter confirmation mode, show tick emoji & tooltip
+    setConfirmingHabitId(currentHabit.id);
+
+    if (confirmTimerRef.current) clearTimeout(confirmTimerRef.current);
+    confirmTimerRef.current = setTimeout(() => {
+      setConfirmingHabitId(null);
+    }, CONFIRM_TIMEOUT_MS);
+  };
 
   // Pointer drag event handlers
   const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
@@ -275,9 +400,9 @@ export default function FloatingCircle() {
       }
     } catch {}
 
-    if (distMoved < 5) {
-      setIsClicked(true);
-      setTimeout(() => setIsClicked(false), 300);
+    // Only process click if user didn't drag
+    if (distMoved < 6) {
+      handleHabitClick();
     }
   };
 
@@ -291,7 +416,31 @@ export default function FloatingCircle() {
     }
   };
 
-  const activeEmoji = emojiList[currentEmojiIndex % emojiList.length] || "⚔️";
+  // Determine displayed emoji & state
+  const isAllDone = pendingHabits.length === 0;
+  const isConfirming = confirmingHabitId !== null;
+
+  const displayEmoji = justCompletedHabit
+    ? "🎉"
+    : isConfirming
+    ? "✅"
+    : isAllDone
+    ? "🎉"
+    : currentHabit?.emoji || "⚔️";
+
+  const nativeTitle = isConfirming
+    ? "is it really completed?"
+    : justCompletedHabit
+    ? `Done: ${justCompletedHabit}! 🎉`
+    : isAllDone
+    ? "All habits completed for today! 🎉"
+    : currentHabit
+    ? `Click to complete "${currentHabit.name}"`
+    : "Halberd";
+
+  // Position tooltip above or below circle based on screen clearance
+  const isNearTop = position.y < 60;
+  const isNearRight = typeof window !== "undefined" && position.x > window.innerWidth - 180;
 
   return (
     <div
@@ -301,59 +450,107 @@ export default function FloatingCircle() {
         top: `${position.y}px`,
         width: `${CIRCLE_SIZE}px`,
         height: `${CIRCLE_SIZE}px`,
-        borderRadius: "50%",
-        backgroundColor: "#ffffff",
-        boxShadow: isDragging
-          ? "0 20px 32px -4px rgba(0, 0, 0, 0.28), 0 10px 16px -4px rgba(0, 0, 0, 0.15), 0 0 0 2px rgba(99, 102, 241, 0.35)"
-          : isHovered
-          ? "0 14px 28px -4px rgba(0, 0, 0, 0.2), 0 6px 12px -2px rgba(0, 0, 0, 0.12), 0 0 0 1px rgba(0, 0, 0, 0.08)"
-          : "0 10px 22px -3px rgba(0, 0, 0, 0.16), 0 4px 8px -2px rgba(0, 0, 0, 0.08), 0 0 0 1px rgba(0, 0, 0, 0.06)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        cursor: isDragging ? "grabbing" : "grab",
+        zIndex: 2147483647,
         userSelect: "none",
         WebkitUserSelect: "none",
         touchAction: "none",
-        zIndex: 2147483647,
-        transform: isDragging
-          ? "scale(1.08)"
-          : isClicked
-          ? "scale(0.92)"
-          : isHovered
-          ? "scale(1.06)"
-          : "scale(1)",
-        transition: isDragging
-          ? "transform 0.1s ease, box-shadow 0.15s ease"
-          : "transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.2s ease",
-        pointerEvents: "auto",
       }}
-      onPointerDown={handlePointerDown}
-      onPointerMove={handlePointerMove}
-      onPointerUp={handlePointerUp}
-      onPointerCancel={handlePointerCancel}
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
-      title="Halberd (Drag anywhere to move)"
     >
-      <span
+      {/* Visual Tooltip for Confirmation */}
+      {isConfirming && (
+        <div
+          style={{
+            position: "absolute",
+            [isNearTop ? "top" : "bottom"]: `${CIRCLE_SIZE + 10}px`,
+            [isNearRight ? "right" : "left"]: isNearRight ? "0px" : "50%",
+            transform: isNearRight ? "none" : "translateX(-50%)",
+            backgroundColor: "rgba(15, 23, 42, 0.94)",
+            color: "#ffffff",
+            padding: "7px 14px",
+            borderRadius: "10px",
+            fontSize: "12px",
+            fontWeight: 600,
+            whiteSpace: "nowrap",
+            boxShadow: "0 10px 25px -3px rgba(0, 0, 0, 0.35), 0 4px 6px -2px rgba(0, 0, 0, 0.2)",
+            border: "1px solid rgba(255, 255, 255, 0.15)",
+            backdropFilter: "blur(8px)",
+            pointerEvents: "none",
+            display: "flex",
+            alignItems: "center",
+            gap: "6px",
+            animation: "halberd-tooltip-pop 0.2s cubic-bezier(0.34, 1.56, 0.64, 1)",
+          }}
+        >
+          <span style={{ fontSize: "14px" }}>🤔</span>
+          <span>is it really completed ?</span>
+        </div>
+      )}
+
+      {/* Main Floating Circle */}
+      <div
         style={{
-          fontSize: "24px",
-          lineHeight: "1",
-          pointerEvents: "none",
-          userSelect: "none",
-          WebkitUserSelect: "none",
-          display: "inline-flex",
+          width: `${CIRCLE_SIZE}px`,
+          height: `${CIRCLE_SIZE}px`,
+          borderRadius: "50%",
+          backgroundColor: "#ffffff",
+          boxShadow: isDragging
+            ? "0 20px 32px -4px rgba(0, 0, 0, 0.28), 0 10px 16px -4px rgba(0, 0, 0, 0.15), 0 0 0 2px rgba(99, 102, 241, 0.35)"
+            : isConfirming
+            ? "0 14px 28px -4px rgba(34, 197, 94, 0.4), 0 6px 12px -2px rgba(34, 197, 94, 0.25), 0 0 0 2.5px rgba(34, 197, 94, 0.6)"
+            : justCompletedHabit
+            ? "0 14px 28px -4px rgba(99, 102, 241, 0.4), 0 6px 12px -2px rgba(99, 102, 241, 0.2), 0 0 0 2px rgba(99, 102, 241, 0.5)"
+            : isHovered
+            ? "0 14px 28px -4px rgba(0, 0, 0, 0.2), 0 6px 12px -2px rgba(0, 0, 0, 0.12), 0 0 0 1px rgba(0, 0, 0, 0.08)"
+            : "0 10px 22px -3px rgba(0, 0, 0, 0.16), 0 4px 8px -2px rgba(0, 0, 0, 0.08), 0 0 0 1px rgba(0, 0, 0, 0.06)",
+          display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          filter: "drop-shadow(0 2px 4px rgba(0,0,0,0.12))",
-          transform: isTransitioning ? "scale(0.7) rotate(-10deg)" : "scale(1) rotate(0deg)",
-          opacity: isTransitioning ? 0.4 : 1,
-          transition: "transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.2s ease",
+          cursor: isDragging ? "grabbing" : "pointer",
+          transform: isDragging
+            ? "scale(1.08)"
+            : isConfirming
+            ? "scale(1.12)"
+            : justCompletedHabit
+            ? "scale(1.15)"
+            : isHovered
+            ? "scale(1.06)"
+            : "scale(1)",
+          transition: isDragging
+            ? "transform 0.1s ease, box-shadow 0.15s ease"
+            : "transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.2s ease",
+          pointerEvents: "auto",
         }}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+        onPointerCancel={handlePointerCancel}
+        onMouseEnter={() => setIsHovered(true)}
+        onMouseLeave={() => setIsHovered(false)}
+        title={nativeTitle}
       >
-        {activeEmoji}
-      </span>
+        <span
+          style={{
+            fontSize: "24px",
+            lineHeight: "1",
+            pointerEvents: "none",
+            userSelect: "none",
+            WebkitUserSelect: "none",
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+            filter: "drop-shadow(0 2px 4px rgba(0,0,0,0.12))",
+            transform: isTransitioning
+              ? "scale(0.7) rotate(-10deg)"
+              : isConfirming
+              ? "scale(1.15)"
+              : "scale(1) rotate(0deg)",
+            opacity: isTransitioning ? 0.4 : 1,
+            transition: "transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.2s ease",
+          }}
+        >
+          {displayEmoji}
+        </span>
+      </div>
     </div>
   );
 }
