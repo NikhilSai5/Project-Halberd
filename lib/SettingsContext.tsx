@@ -422,6 +422,11 @@ useEffect(() => {
   useEffect(() => {
     if (!initialized) return;
     localStorage.setItem("todoGroups", JSON.stringify(todoGroups));
+    try {
+      if (browser?.storage?.local) {
+        browser.storage.local.set({ halberd_todo_groups: todoGroups }).catch(() => {});
+      }
+    } catch {}
   }, [todoGroups, initialized]);
 
   useEffect(() => {
