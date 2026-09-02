@@ -2,6 +2,11 @@
 
 import { useState, useRef, useEffect } from "react";
 import { useSettings, type TodoGroup, type TodoItem, type WallpaperFile } from '@/lib/SettingsContext';
+import { useAuth } from '@/lib/AuthContext';
+import { userStorageKey } from '@/lib/userStorage';
+import defaultWallpaperOne from '@/assets/default wallpapers/wallhaven-d6q21o.jpg';
+import defaultWallpaperTwo from '@/assets/default wallpapers/wallhaven-l87z7l.jpg';
+import defaultWallpaperThree from '@/assets/default wallpapers/wallhaven-yqxzqx.jpg';
 
 const navItems = [
   { icon: "wallpaper", label: "Wallpaper", id: "wallpaper" },
@@ -12,6 +17,7 @@ const navItems = [
   // { icon: "flag", label: "Goals", id: "goals" },
   { icon: "link", label: "Connections", id: "connections" },
   { icon: "extension", label: "Extension", id: "extension" },
+  { icon: "person", label: "Profile", id: "profile" },
   
 ];
 
@@ -21,6 +27,12 @@ const accentColors = [
   { color: "#B69BCB", label: "Purple", selected: false },
   { color: "#E8A65D", label: "Orange", selected: false },
   { color: "#add6fa", label: "Blue", selected: false, border: true },
+];
+
+const defaultWallpapers: WallpaperFile[] = [
+  { id: "default-d6q21o", name: "Quiet horizon", preview: defaultWallpaperOne },
+  { id: "default-l87z7l", name: "Morning light", preview: defaultWallpaperTwo },
+  { id: "default-yqxzqx", name: "Deep blue", preview: defaultWallpaperThree },
 ];
 
 interface WeeklyGoal {
@@ -34,6 +46,7 @@ interface WeeklyGoal {
 }
 
 export default function Settings() {
+  const { user, signOut } = useAuth();
   const [activeNav, setActiveNav] = useState("wallpaper");
   const [theme, setTheme] = useState("light");
   const [fontFamily, setFontFamily] = useState("Inter");
@@ -221,6 +234,14 @@ export default function Settings() {
 
     // Reset input value to allow re-uploading same file
     if (e.target) e.target.value = "";
+  };
+
+  const selectDefaultWallpaper = (wallpaper: WallpaperFile) => {
+    if (!wallpapers.some((item) => item.id === wallpaper.id)) {
+      addWallpaper(wallpaper);
+    }
+    setActiveWallpaper(wallpaper.id);
+    if (user) localStorage.setItem(userStorageKey(user.id, "activeWallpaper"), JSON.stringify(wallpaper.id));
   };
 
   // Handle folder selection for slideshow
@@ -493,6 +514,27 @@ export default function Settings() {
                 <>
                   <h3 className="page-title text-on-surface settings-page-heading hidden md:block">Wallpaper</h3>
                   <div className="settings-sections space-y-section-gap">
+                    <div className="settings-section">
+                      <h4 className="section-heading text-text-primary">Default Wallpapers</h4>
+                      <p className="label-copy text-text-secondary">Choose a backdrop for every new tab.</p>
+                      <div className="wallpaper-preview-grid">
+                        {defaultWallpapers.map((wallpaper) => (
+                          <button
+                            key={wallpaper.id}
+                            type="button"
+                            className={`relative aspect-square rounded-lg overflow-hidden border-2 transition-all ${activeWallpaper === wallpaper.id ? "border-primary" : "border-border-subtle"} bg-surface-container-low cursor-pointer`}
+                            onClick={() => selectDefaultWallpaper(wallpaper)}
+                            aria-label={`Use ${wallpaper.name} wallpaper`}
+                            aria-pressed={activeWallpaper === wallpaper.id}
+                          >
+                            <img src={wallpaper.preview} alt={wallpaper.name} className="w-full h-full object-cover" />
+                            <span className="wallpaper-name-overlay">{wallpaper.name}</span>
+                            {activeWallpaper === wallpaper.id && <span className="absolute top-2 right-2 material-symbols-outlined text-white text-[20px]" style={{ fontVariationSettings: "'FILL' 1" }}>check_circle</span>}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
                     
                 
 
@@ -1212,6 +1254,14 @@ export default function Settings() {
                         </div>
                       </div>
                     </div>
+
+                    <div className="settings-section">
+                      <h4 className="section-heading text-text-primary">Account</h4>
+                      <button type="button" onClick={() => void signOut()} className="button-regular button-regular--outlined font-section-title text-section-title text-error border-error w-full justify-center">
+                        <span className="material-symbols-outlined text-[18px]" aria-hidden="true">logout</span>
+                        Sign out
+                      </button>
+                    </div>
                   </div>
                 </>
               )}
@@ -1248,6 +1298,53 @@ export default function Settings() {
                           </button>
                         </div>
                       </div>
+                    </div>
+                  </div>
+                </>
+              )}
+
+              {activeNav === "profile" && (
+                <>
+                  <h3 className="page-title text-on-surface settings-page-heading hidden md:block">Profile</h3>
+                  <div className="settings-sections space-y-section-gap">
+                    <div className="settings-section">
+                      <div className="profile-heading">
+                        <div className="profile-avatar">
+                          {(user?.user_metadata?.name as string | undefined)?.charAt(0).toUpperCase() || user?.email?.charAt(0).toUpperCase() || "H"}
+                        </div>
+                        <div>
+                          <h4 className="section-heading text-text-primary">Your account</h4>
+                          <p className="label-copy text-text-secondary">Signed in and synced with Halberd</p>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="settings-section">
+                      <div className="profile-detail-row">
+                        <span className="label-copy text-text-secondary">Name</span>
+                        <span className="body-copy text-text-primary">{(user?.user_metadata?.name as string | undefined) || "Not provided"}</span>
+                      </div>
+                      <div className="profile-detail-row">
+                        <span className="label-copy text-text-secondary">Email</span>
+                        <span className="body-copy text-text-primary profile-detail-value">{user?.email || "Not available"}</span>
+                      </div>
+                      <div className="profile-detail-row">
+                        <span className="label-copy text-text-secondary">Phone</span>
+                        <span className="body-copy text-text-primary">{(user?.user_metadata?.phone as string | undefined) || "Not provided"}</span>
+                      </div>
+                      <div className="profile-detail-row">
+                        <span className="label-copy text-text-secondary">Member since</span>
+                        <span className="body-copy text-text-primary">{user?.created_at ? new Date(user.created_at).toLocaleDateString("en-US", { month: "long", year: "numeric" }) : "Not available"}</span>
+                      </div>
+                    </div>
+
+                    <div className="settings-section">
+                      <h4 className="section-heading text-text-primary">Session</h4>
+                      <p className="label-copy text-text-secondary">Sign out of Halberd on this browser.</p>
+                      <button type="button" onClick={() => void signOut()} className="button-regular button-regular--outlined font-section-title text-section-title text-error border-error w-full justify-center">
+                        <span className="material-symbols-outlined text-[18px]" aria-hidden="true">logout</span>
+                        Log out
+                      </button>
                     </div>
                   </div>
                 </>

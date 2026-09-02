@@ -6,13 +6,13 @@ import AnimatedEmoji from '@/components/AnimatedEmoji';
 import EmojiPicker, { SkinTonePickerLocation } from 'emoji-picker-react';
 import type { EmojiClickData } from 'emoji-picker-react';
 
-const EMOJIS = [
+export const EMOJIS = [
   "📚", "💪", "🔥", "⚡", "💧", "🎯", "🏆", "✨",
   "🌱", "🥗", "🍎", "☕", "🧠", "⏰", "🚀", "✍️",
   "🎵", "☀️", "🌙", "👟", "🚫", "🎉"
 ];
 
-const HABIT_COLORS = [
+export const HABIT_COLORS = [
   "#94c7a4", "#6bb3d6", "#d6a66b", "#d66b6b", "#b36bd6", "#6bd6b3",
   "#d68b6b", "#6bd68b", "#8b6bd6", "#d66bd6", "#6bd6d6", "#d6d66b"
 ];
@@ -50,7 +50,7 @@ function getStreakCount(tracking: Record<string, "done" | "missed" | "upcoming">
   return streak;
 }
 
-const EmojiPickerPanel = ({
+export const EmojiPickerPanel = ({
   selected,
   onSelect,
 }: {
@@ -92,7 +92,7 @@ const EmojiPickerPanel = ({
   </div>
 );
 
-const ColorPicker = ({
+export const ColorPicker = ({
   selected,
   onSelect,
 }: {

@@ -1,5 +1,6 @@
 import { openDB, type DBSchema, type IDBPDatabase } from 'idb';
 import type { ProductiveSession, WeeklyGoal } from '@/lib/weeklyGoalTypes';
+import type { Habit } from '@/lib/SettingsContext';
 
 export type { ProductiveSession } from '@/lib/weeklyGoalTypes';
 
@@ -34,6 +35,10 @@ interface HalberdDB extends DBSchema {
       'by-start-time': number;
     };
   };
+  habits: {
+    key: string;
+    value: Habit;
+  };
 }
 
 let dbInstance: IDBPDatabase<HalberdDB> | null = null;
@@ -41,7 +46,7 @@ let dbInstance: IDBPDatabase<HalberdDB> | null = null;
 export async function getDB(): Promise<IDBPDatabase<HalberdDB>> {
   if (dbInstance) return dbInstance;
 
-  dbInstance = await openDB<HalberdDB>('halberd-db', 5, {
+  dbInstance = await openDB<HalberdDB>('halberd-db', 6, {
     upgrade(db, oldVersion) {
       if (!db.objectStoreNames.contains('items')) {
         db.createObjectStore('items', { keyPath: 'id' });
@@ -60,10 +65,26 @@ export async function getDB(): Promise<IDBPDatabase<HalberdDB>> {
         store.createIndex('by-weekly-goal', 'weeklyGoalId');
         store.createIndex('by-start-time', 'startTime');
       }
+      if (!db.objectStoreNames.contains('habits')) {
+        db.createObjectStore('habits', { keyPath: 'id' });
+      }
     },
   });
 
   return dbInstance;
+}
+
+export async function getHabits(): Promise<Habit[]> {
+  const db = await getDB();
+  return db.getAll('habits');
+}
+
+export async function setHabitsInDB(habits: Habit[]): Promise<void> {
+  const db = await getDB();
+  const tx = db.transaction('habits', 'readwrite');
+  await tx.store.clear();
+  for (const habit of habits) await tx.store.put(habit);
+  await tx.done;
 }
 
 export async function closeDB(): Promise<void> {

@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
+import { useAuth } from "@/lib/AuthContext";
+import { userStorageKey } from "@/lib/userStorage";
 
 const DEFAULT_FOCUS_TIME = 25 * 60;
 
@@ -14,10 +16,8 @@ interface Session {
 }
 
 export default function FocusMode() {
-  const [focusTime, setFocusTime] = useState(() => {
-    const stored = localStorage.getItem("focus_time");
-    return stored ? parseInt(stored, 10) : DEFAULT_FOCUS_TIME;
-  });
+  const { user } = useAuth();
+  const [focusTime, setFocusTime] = useState(DEFAULT_FOCUS_TIME);
   const [timeLeft, setTimeLeft] = useState(focusTime);
   const [isRunning, setIsRunning] = useState(false);
   const [sessionsCompleted, setSessionsCompleted] = useState(0);
@@ -25,22 +25,32 @@ export default function FocusMode() {
   const [isEditingTimer, setIsEditingTimer] = useState(false);
   const [editTimerValue, setEditTimerValue] = useState("");
   const [taskName, setTaskName] = useState("Build Halberd");
-  const [history, setHistory] = useState<Session[]>(() => {
-    const stored = localStorage.getItem("focus_history");
-    return stored ? JSON.parse(stored) : [];
-  });
+  const [history, setHistory] = useState<Session[]>([]);
   
   const intervalRef = useRef<number | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const timerInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    localStorage.setItem("focus_time", focusTime.toString());
-  }, [focusTime]);
+    if (!user) return;
+    const storedTime = localStorage.getItem(userStorageKey(user.id, "focus_time"));
+    const storedHistory = localStorage.getItem(userStorageKey(user.id, "focus_history"));
+    const nextTime = storedTime ? parseInt(storedTime, 10) : DEFAULT_FOCUS_TIME;
+    setFocusTime(nextTime); setTimeLeft(nextTime);
+    if (storedHistory) {
+      try { setHistory(JSON.parse(storedHistory)); } catch { setHistory([]); }
+    } else setHistory([]);
+  }, [user?.id]);
 
   useEffect(() => {
-    localStorage.setItem("focus_history", JSON.stringify(history));
-  }, [history]);
+    if (!user) return;
+    localStorage.setItem(userStorageKey(user.id, "focus_time"), focusTime.toString());
+  }, [focusTime, user?.id]);
+
+  useEffect(() => {
+    if (!user) return;
+    localStorage.setItem(userStorageKey(user.id, "focus_history"), JSON.stringify(history));
+  }, [history, user?.id]);
 
   useEffect(() => {
     if (!isRunning) return;

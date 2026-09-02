@@ -13,6 +13,11 @@ import Navbar from '@/components/Navbar';
 import PageTransition from '@/components/PageTransition';
 import FloatingCircle from '@/components/FloatingCircle';
 import { SettingsProvider, useSettings } from '@/lib/SettingsContext';
+import { AuthProvider, useAuth } from '@/lib/AuthContext';
+import { AuthScreen, RegisterScreen } from './pages/Onboarding/Onboarding';
+import Onboarding from './pages/Onboarding/Onboarding';
+import { supabase } from '@/lib/supabase';
+import { userStorageKey } from '@/lib/userStorage';
 import './style.css';
 
 type Page = "home" | "pomodoro" | "weekly-goal" | "focus" | "tools" | "settings" | "calendar" | "habit-tracker";
@@ -31,6 +36,54 @@ function getIntervalMs(interval: string): number {
 }
 
 function AppContent() {
+  const { user, loading } = useAuth();
+  const [authView, setAuthView] = useState<"login" | "register">("login");
+  const [onboarding, setOnboarding] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    if (!user) {
+      setOnboarding(null);
+      return;
+    }
+    const completedKey = userStorageKey(user.id, "halberd_onboarding_complete");
+    const pendingKey = userStorageKey(`registration:${user.email?.toLowerCase() ?? "unknown"}`, "halberd_pending_onboarding");
+    if (localStorage.getItem(completedKey) === "true" || localStorage.getItem(pendingKey) !== "true") {
+      setOnboarding(false);
+      return;
+    }
+    let cancelled = false;
+    const checkOnboarding = async () => {
+      if (supabase) {
+        const { data } = await supabase
+          .from("onboarding_preferences")
+          .select("onboarding_completed")
+          .eq("user_id", user.id)
+          .maybeSingle();
+        if (!cancelled && data?.onboarding_completed) {
+          localStorage.setItem(completedKey, "true");
+          setOnboarding(false);
+          return;
+        }
+      }
+      if (!cancelled) setOnboarding(true);
+    };
+    void checkOnboarding();
+    return () => { cancelled = true; };
+  }, [user]);
+
+  if (loading || (user && onboarding === null)) {
+    return <div className="auth-loading"><span className="material-symbols-outlined">track_changes</span><span>Preparing your workspace...</span></div>;
+  }
+  if (!user) {
+    return authView === "login"
+      ? <AuthScreen onRegister={() => setAuthView("register")} />
+      : <RegisterScreen onBack={() => setAuthView("login")} onContinue={() => setOnboarding(true)} />;
+  }
+  if (onboarding) return <Onboarding onComplete={() => setOnboarding(false)} />;
+  return <AuthenticatedApp />;
+}
+
+function AuthenticatedApp() {
   const {
     showTodoListInHome,
     wallpapers,
@@ -155,8 +208,10 @@ function AppContent() {
 
 export default function App() {
   return (
-    <SettingsProvider>
-      <AppContent />
-    </SettingsProvider>
+    <AuthProvider>
+      <SettingsProvider>
+        <AppContent />
+      </SettingsProvider>
+    </AuthProvider>
   );
 }

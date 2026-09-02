@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
+import { useAuth } from "@/lib/AuthContext";
+import { userStorageKey } from "@/lib/userStorage";
 
 const CIRCUMFERENCE = 2 * Math.PI * 15.9155;
 const DEFAULT_WORK_TIME = 25 * 60;
@@ -16,15 +18,9 @@ interface Session {
 }
 
 export default function Pomodoro() {
-  const [workTime, setWorkTime] = useState(() => {
-    const stored = localStorage.getItem("pomodoro_work_time");
-    return stored ? parseInt(stored, 10) : DEFAULT_WORK_TIME;
-  });
-
-  const [restTime, setRestTime] = useState(() => {
-    const stored = localStorage.getItem("pomodoro_rest_time");
-    return stored ? parseInt(stored, 10) : DEFAULT_REST_TIME;
-  });
+  const { user } = useAuth();
+  const [workTime, setWorkTime] = useState(DEFAULT_WORK_TIME);
+  const [restTime, setRestTime] = useState(DEFAULT_REST_TIME);
 
   const [timeLeft, setTimeLeft] = useState(workTime);
   const [isRunning, setIsRunning] = useState(false);
@@ -33,15 +29,25 @@ export default function Pomodoro() {
   const [showTimeEdit, setShowTimeEdit] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
 
-  const [history, setHistory] = useState<Session[]>(() => {
-    const stored = localStorage.getItem("pomodoro_history");
-    return stored ? JSON.parse(stored) : [];
-  });
+  const [history, setHistory] = useState<Session[]>([]);
 
   const intervalRef = useRef<number | null>(null);
   const circleRef = useRef<SVGPathElement>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const editPopupRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!user) return;
+    const storedWork = localStorage.getItem(userStorageKey(user.id, "pomodoro_work_time"));
+    const storedRest = localStorage.getItem(userStorageKey(user.id, "pomodoro_rest_time"));
+    const storedHistory = localStorage.getItem(userStorageKey(user.id, "pomodoro_history"));
+    const nextWork = storedWork ? parseInt(storedWork, 10) : DEFAULT_WORK_TIME;
+    const nextRest = storedRest ? parseInt(storedRest, 10) : DEFAULT_REST_TIME;
+    setWorkTime(nextWork); setRestTime(nextRest); setTimeLeft(nextWork);
+    if (storedHistory) {
+      try { setHistory(JSON.parse(storedHistory)); } catch { setHistory([]); }
+    } else setHistory([]);
+  }, [user?.id]);
 
   const currentTotalTime = isWorkSession ? workTime : restTime;
 
@@ -50,33 +56,36 @@ export default function Pomodoro() {
   // --------------------------------------------------
 
   useEffect(() => {
+    if (!user) return;
     localStorage.setItem(
-      "pomodoro_work_time",
+      userStorageKey(user.id, "pomodoro_work_time"),
       workTime.toString()
     );
-  }, [workTime]);
+  }, [workTime, user?.id]);
 
   // --------------------------------------------------
   // Persist rest time
   // --------------------------------------------------
 
   useEffect(() => {
+    if (!user) return;
     localStorage.setItem(
-      "pomodoro_rest_time",
+      userStorageKey(user.id, "pomodoro_rest_time"),
       restTime.toString()
     );
-  }, [restTime]);
+  }, [restTime, user?.id]);
 
   // --------------------------------------------------
   // Persist history
   // --------------------------------------------------
 
   useEffect(() => {
+    if (!user) return;
     localStorage.setItem(
-      "pomodoro_history",
+      userStorageKey(user.id, "pomodoro_history"),
       JSON.stringify(history)
     );
-  }, [history]);
+  }, [history, user?.id]);
 
   // --------------------------------------------------
   // Session completion

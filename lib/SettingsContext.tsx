@@ -2,6 +2,8 @@
 
 import { createContext, useContext, useState, useEffect, type ReactNode } from "react";
 import { browser } from "wxt/browser";
+import { useAuth } from "@/lib/AuthContext";
+import { userStorageKey } from "@/lib/userStorage";
 import {
   getWallpapers,
   addWallpaperToDB,
@@ -18,6 +20,8 @@ import {
   updateProductiveSessionInDB,
   removeProductiveSessionFromDB,
   clearProductiveSessionsFromDB,
+  getHabits,
+  setHabitsInDB,
 } from '@/lib/db';
 import {
   DEFAULT_AUTO_TRACKING_CONFIG,
@@ -165,7 +169,8 @@ const DEFAULT_HABITS: Habit[] = [
 ];
 
 export function SettingsProvider({ children }: { children: ReactNode }) {
-  const [showTodoListInHome, setShowTodoListInHome] = useState(true);
+  const { user } = useAuth();
+  const [showTodoListInHome, setShowTodoListInHome] = useState(false);
   const [showCompletedTasks, setShowCompletedTasks] = useState(true);
   const [todoGroups, setTodoGroups] = useState<TodoGroup[]>(DEFAULT_GROUPS);
   const [habits, setHabits] = useState<Habit[]>(DEFAULT_HABITS);
@@ -232,12 +237,28 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   const [initialized, setInitialized] = useState(false);
 
   useEffect(() => {
-    const storedShowTodo = localStorage.getItem("showTodoListInHome");
+    setInitialized(false);
+    setShowTodoListInHome(false);
+    setShowCompletedTasks(true);
+    setTodoGroups(DEFAULT_GROUPS);
+    setHabits(DEFAULT_HABITS);
+    setWallpapers([]);
+    setActiveWallpaper(null);
+    setWallpaperBlur(0);
+    setWallpaperDarkness(0);
+    setSlideshowSettingsState({ enabled: false, interval: "30min", folderName: null, images: [] });
+    setWeeklyGoals([]);
+    setProductiveSessions([]);
+  }, [user?.id]);
+
+  useEffect(() => {
+    if (!user) return;
+    const storedShowTodo = localStorage.getItem(userStorageKey(user.id, "showTodoListInHome"));
     if (storedShowTodo !== null) {
       setShowTodoListInHome(JSON.parse(storedShowTodo));
     }
 
-    const storedShowCompleted = localStorage.getItem("showCompletedTasks");
+    const storedShowCompleted = localStorage.getItem(userStorageKey(user.id, "showCompletedTasks"));
     if (storedShowCompleted !== null) {
       try {
         setShowCompletedTasks(JSON.parse(storedShowCompleted));
@@ -246,7 +267,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
       }
     }
 
-    const storedGroups = localStorage.getItem("todoGroups");
+    const storedGroups = localStorage.getItem(userStorageKey(user.id, "todoGroups"));
     if (storedGroups !== null) {
       try {
         const parsed = JSON.parse(storedGroups);
@@ -258,7 +279,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
       }
     }
 
-    const storedHabits = localStorage.getItem("habits");
+    const storedHabits = localStorage.getItem(userStorageKey(user.id, "habits"));
     if (storedHabits !== null) {
       try {
         const parsed = JSON.parse(storedHabits);
@@ -310,10 +331,11 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
       }
     }
     setInitialized(true);
-  }, []);
+  }, [user?.id]);
 
-useEffect(() => {
-    const storedWallpapers = localStorage.getItem("wallpapers");
+  useEffect(() => {
+    if (!user) return;
+    const storedWallpapers = localStorage.getItem(userStorageKey(user.id, "wallpapers"));
     if (storedWallpapers !== null) {
       try {
         const parsed = JSON.parse(storedWallpapers);
@@ -328,7 +350,7 @@ useEffect(() => {
         // ignore parse errors
       }
     }
-    const storedActiveWallpaper = localStorage.getItem("activeWallpaper");
+    const storedActiveWallpaper = localStorage.getItem(userStorageKey(user.id, "activeWallpaper"));
     if (storedActiveWallpaper !== null) {
       try {
         setActiveWallpaper(JSON.parse(storedActiveWallpaper));
@@ -336,12 +358,12 @@ useEffect(() => {
         setActiveWallpaper(storedActiveWallpaper);
       }
     }
-    const storedWallpaperBlur = localStorage.getItem("wallpaperBlur");
+    const storedWallpaperBlur = localStorage.getItem(userStorageKey(user.id, "wallpaperBlur"));
     if (storedWallpaperBlur !== null) setWallpaperBlur(Number(storedWallpaperBlur) || 0);
-    const storedWallpaperDarkness = localStorage.getItem("wallpaperDarkness");
+    const storedWallpaperDarkness = localStorage.getItem(userStorageKey(user.id, "wallpaperDarkness"));
     if (storedWallpaperDarkness !== null) setWallpaperDarkness(Number(storedWallpaperDarkness) || 0);
     
-    const storedSlideshow = localStorage.getItem("slideshowSettings");
+    const storedSlideshow = localStorage.getItem(userStorageKey(user.id, "slideshowSettings"));
     if (storedSlideshow !== null) {
       try {
         const parsed = JSON.parse(storedSlideshow);
@@ -379,6 +401,10 @@ useEffect(() => {
 
     getProductiveSessions().then(setProductiveSessions).catch(() => {});
 
+    getHabits().then((storedHabits) => {
+      if (storedHabits.length > 0) setHabits(storedHabits);
+    }).catch(() => {});
+
     // Listen to habit updates from external tabs
     const handleStorageChange = (
       changes: Record<string, { oldValue?: any; newValue?: any }>,
@@ -407,62 +433,64 @@ useEffect(() => {
         }
       } catch {}
     };
-  }, []);
+  }, [user?.id]);
 
   useEffect(() => {
-    if (!initialized) return;
-    localStorage.setItem("showTodoListInHome", JSON.stringify(showTodoListInHome));
-  }, [showTodoListInHome, initialized]);
+    if (!initialized || !user) return;
+    localStorage.setItem(userStorageKey(user.id, "showTodoListInHome"), JSON.stringify(showTodoListInHome));
+  }, [showTodoListInHome, initialized, user?.id]);
 
   useEffect(() => {
-    if (!initialized) return;
-    localStorage.setItem("showCompletedTasks", JSON.stringify(showCompletedTasks));
-  }, [showCompletedTasks, initialized]);
+    if (!initialized || !user) return;
+    localStorage.setItem(userStorageKey(user.id, "showCompletedTasks"), JSON.stringify(showCompletedTasks));
+  }, [showCompletedTasks, initialized, user?.id]);
 
   useEffect(() => {
-    if (!initialized) return;
-    localStorage.setItem("todoGroups", JSON.stringify(todoGroups));
+    if (!initialized || !user) return;
+    localStorage.setItem(userStorageKey(user.id, "todoGroups"), JSON.stringify(todoGroups));
     try {
       if (browser?.storage?.local) {
         browser.storage.local.set({ halberd_todo_groups: todoGroups }).catch(() => {});
       }
     } catch {}
-  }, [todoGroups, initialized]);
+  }, [todoGroups, initialized, user?.id]);
 
   useEffect(() => {
-    if (!initialized) return;
-    localStorage.setItem("habits", JSON.stringify(habits));
+    if (!initialized || !user) return;
+    localStorage.setItem(userStorageKey(user.id, "habits"), JSON.stringify(habits));
+    setHabitsInDB(habits).catch(() => {});
     try {
       if (browser?.storage?.local) {
         browser.storage.local.set({ halberd_habits: habits }).catch(() => {});
       }
     } catch {}
-  }, [habits, initialized]);
+  }, [habits, initialized, user?.id]);
 
   useEffect(() => {
-    if (!initialized) return;
+    if (!initialized || !user) return;
+    localStorage.setItem(userStorageKey(user.id, "wallpapers"), JSON.stringify(wallpapers));
     wallpapers.forEach((wp) => {
       addWallpaperToDB(wp).catch(() => {});
     });
-  }, [wallpapers, initialized]);
+  }, [wallpapers, initialized, user?.id]);
 
   useEffect(() => {
-    if (!initialized) return;
-    localStorage.setItem("activeWallpaper", JSON.stringify(activeWallpaper));
-  }, [activeWallpaper, initialized]);
+    if (!initialized || !user) return;
+    localStorage.setItem(userStorageKey(user.id, "activeWallpaper"), JSON.stringify(activeWallpaper));
+  }, [activeWallpaper, initialized, user?.id]);
 
   useEffect(() => {
-    if (!initialized) return;
-    localStorage.setItem("wallpaperBlur", String(wallpaperBlur));
-  }, [wallpaperBlur, initialized]);
+    if (!initialized || !user) return;
+    localStorage.setItem(userStorageKey(user.id, "wallpaperBlur"), String(wallpaperBlur));
+  }, [wallpaperBlur, initialized, user?.id]);
 
   useEffect(() => {
-    if (!initialized) return;
-    localStorage.setItem("wallpaperDarkness", String(wallpaperDarkness));
-  }, [wallpaperDarkness, initialized]);
+    if (!initialized || !user) return;
+    localStorage.setItem(userStorageKey(user.id, "wallpaperDarkness"), String(wallpaperDarkness));
+  }, [wallpaperDarkness, initialized, user?.id]);
 
   useEffect(() => {
-    if (!initialized) return;
+    if (!initialized || !user) return;
     /*
      * Image data lives in IndexedDB (too large for localStorage),
      * so only the lightweight settings are persisted here.
@@ -472,8 +500,8 @@ useEffect(() => {
       interval: slideshowSettings.interval,
       folderName: slideshowSettings.folderName,
     };
-    localStorage.setItem("slideshowSettings", JSON.stringify(persistedSlideshowSettings));
-  }, [slideshowSettings, initialized]);
+    localStorage.setItem(userStorageKey(user.id, "slideshowSettings"), JSON.stringify(persistedSlideshowSettings));
+  }, [slideshowSettings, initialized, user?.id]);
 
   useEffect(() => {
     if (!initialized) return;
