@@ -18,6 +18,7 @@ import { AuthScreen, RegisterScreen } from './pages/Onboarding/Onboarding';
 import Onboarding from './pages/Onboarding/Onboarding';
 import { supabase } from '@/lib/supabase';
 import { userStorageKey } from '@/lib/userStorage';
+import defaultWallpaperFallback from '@/assets/default wallpapers/wallhaven-d6q21o.jpg';
 import './style.css';
 
 type Page = "home" | "pomodoro" | "weekly-goal" | "focus" | "tools" | "settings" | "calendar" | "habit-tracker";
@@ -47,7 +48,7 @@ function AppContent() {
     }
     const completedKey = userStorageKey(user.id, "halberd_onboarding_complete");
     const pendingKey = userStorageKey(`registration:${user.email?.toLowerCase() ?? "unknown"}`, "halberd_pending_onboarding");
-    if (localStorage.getItem(completedKey) === "true" || localStorage.getItem(pendingKey) !== "true") {
+    if (localStorage.getItem(completedKey) === "true") {
       setOnboarding(false);
       return;
     }
@@ -64,8 +65,12 @@ function AppContent() {
           setOnboarding(false);
           return;
         }
+        // Any authenticated account without a completed record, including Google accounts,
+        // goes through the same onboarding flow.
+        if (!cancelled) setOnboarding(true);
+        return;
       }
-      if (!cancelled) setOnboarding(true);
+      if (!cancelled) setOnboarding(localStorage.getItem(pendingKey) === "true");
     };
     void checkOnboarding();
     return () => { cancelled = true; };
@@ -167,7 +172,7 @@ function AuthenticatedApp() {
   }, [slideshowSettings.enabled, slideshowSettings.interval, slideshowSettings.images.length]);
 
   // Determine current background image
-  let backgroundImage: string | null = null;
+  let backgroundImage: string | null = defaultWallpaperFallback;
   if (slideshowSettings.enabled && slideshowSettings.images.length > 0) {
     backgroundImage = slideshowSettings.images[slideshowIndex] ?? null;
   } else {

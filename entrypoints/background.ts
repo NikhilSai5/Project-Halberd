@@ -225,6 +225,14 @@ async function handleTabUpdated(tabId: number, changeInfo: { url?: string; title
 }
 
 export default defineBackground(() => {
+  browser.runtime.onMessage.addListener((message: { type?: string; authUrl?: string }) => {
+    if (message.type !== 'halberd-google-auth' || !message.authUrl) return undefined;
+    return browser.identity.launchWebAuthFlow({
+      interactive: true,
+      url: message.authUrl,
+    });
+  });
+
   void initializeActiveTab();
   browser.alarms.create(TRACKING_ALARM, { periodInMinutes: 0.5 });
 

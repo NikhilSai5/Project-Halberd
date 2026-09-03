@@ -335,20 +335,11 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!user) return;
-    const storedWallpapers = localStorage.getItem(userStorageKey(user.id, "wallpapers"));
-    if (storedWallpapers !== null) {
-      try {
-        const parsed = JSON.parse(storedWallpapers);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          setWallpapers(parsed);
-          // Migrate existing wallpapers to IndexedDB
-          parsed.forEach((wp: WallpaperFile) => {
-            addWallpaperToDB(wp).catch(() => {});
-          });
-        }
-      } catch {
-        // ignore parse errors
-      }
+    // Wallpaper image data belongs in IndexedDB; remove older oversized localStorage data.
+    try {
+      localStorage.removeItem(userStorageKey(user.id, "wallpapers"));
+    } catch {
+      // Ignore storage cleanup failures.
     }
     const storedActiveWallpaper = localStorage.getItem(userStorageKey(user.id, "activeWallpaper"));
     if (storedActiveWallpaper !== null) {
@@ -468,7 +459,6 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!initialized || !user) return;
-    localStorage.setItem(userStorageKey(user.id, "wallpapers"), JSON.stringify(wallpapers));
     wallpapers.forEach((wp) => {
       addWallpaperToDB(wp).catch(() => {});
     });

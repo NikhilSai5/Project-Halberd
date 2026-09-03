@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import type { Session, User } from "@supabase/supabase-js";
+import { browser } from "wxt/browser";
 import { isSupabaseConfigured, supabase } from "@/lib/supabase";
 
 interface AuthContextValue {
@@ -11,6 +12,7 @@ interface AuthContextValue {
   configured: boolean;
   error: string | null;
   signIn: (email: string, password: string) => Promise<void>;
+  signInWithGoogle: () => Promise<void>;
   signUp: (email: string, password: string, profile: { name: string; phone: string }) => Promise<void>;
   signOut: () => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
@@ -63,6 +65,37 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const signInWithGoogle = async () => {
+    if (!supabase) throw new Error("Supabase is not configured. Add the public project URL and anon key.");
+    setError(null);
+    const redirectTo = browser.identity.getRedirectURL("oauth2");
+    const { data, error: googleError } = await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: { redirectTo, skipBrowserRedirect: true },
+    });
+    if (googleError) {
+      setError(googleError.message);
+      throw authError(googleError);
+    }
+    if (!data.url) throw new Error("Supabase did not return a Google sign-in URL.");
+
+    const callbackUrl = await browser.runtime.sendMessage({
+      type: "halberd-google-auth",
+      authUrl: data.url,
+    }) as string;
+    const hash = callbackUrl.split("#")[1];
+    const params = new URLSearchParams(hash || "");
+    const accessToken = params.get("access_token");
+    const refreshToken = params.get("refresh_token");
+    if (!accessToken || !refreshToken) throw new Error("Google sign-in did not return a valid session.");
+
+    const { error: sessionError } = await supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken });
+    if (sessionError) {
+      setError(sessionError.message);
+      throw authError(sessionError);
+    }
+  };
+
   const signUp = async (email: string, password: string, profile: { name: string; phone: string }) => {
     if (!supabase) throw new Error("Supabase is not configured. Add the public project URL and anon key.");
     setError(null);
@@ -91,7 +124,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user: session?.user ?? null, session, loading, configured: isSupabaseConfigured, error, signIn, signUp, signOut, resetPassword }}>
+    <AuthContext.Provider value={{ user: session?.user ?? null, session, loading, configured: isSupabaseConfigured, error, signIn, signInWithGoogle, signUp, signOut, resetPassword }}>
       {children}
     </AuthContext.Provider>
   );

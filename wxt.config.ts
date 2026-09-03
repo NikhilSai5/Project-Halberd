@@ -6,7 +6,7 @@ export default defineConfig({
   manifest: {
     name: 'Halberd',
     description: 'Productivity and weekly goals extension',
-    permissions: ['storage', 'tabs', 'alarms', 'idle'],
+    permissions: ['storage', 'tabs', 'alarms', 'idle', 'identity'],
     host_permissions: ['<all_urls>'],
     chrome_url_overrides: {
       newtab: 'newtab.html',

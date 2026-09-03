@@ -44,12 +44,18 @@ function Button({ children, secondary = false, ...props }: React.ButtonHTMLAttri
 }
 
 export function AuthScreen({ onRegister }: { onRegister: () => void }) {
-  const { signIn, resetPassword, configured } = useAuth();
+  const { signIn, signInWithGoogle, resetPassword, configured } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [forgot, setForgot] = useState(false);
+
+  const signInGoogle = async () => {
+    setBusy(true); setMessage("");
+    try { await signInWithGoogle(); }
+    catch (error) { setMessage(error instanceof Error ? error.message : "Unable to continue with Google."); setBusy(false); }
+  };
 
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -78,6 +84,8 @@ export function AuthScreen({ onRegister }: { onRegister: () => void }) {
         {!forgot && <Field label="Password" type="password" value={password} onChange={e => setPassword(e.target.value)} required autoComplete="current-password" />}
         <Button disabled={busy}>{busy ? "Working..." : forgot ? "Send reset link" : "Sign in"}<span className="material-symbols-outlined">arrow_forward</span></Button>
       </form>
+      <div className="auth-divider"><span>or</span></div>
+      <button type="button" className="google-auth-button" onClick={() => void signInGoogle()} disabled={busy || !configured}><span className="google-glyph">G</span>Continue with Google</button>
       {message && <p className="onboarding-message">{message}</p>}
       <div className="auth-links">
         <button type="button" onClick={() => { setForgot(!forgot); setMessage(""); }}>{forgot ? "Back to sign in" : "Forgot password?"}</button>
@@ -182,7 +190,7 @@ export default function Onboarding({ onComplete }: { onComplete: () => void }) {
       // Keep the selected background available immediately on the next new-tab mount.
       if (user) localStorage.setItem(userStorageKey(user.id, "activeWallpaper"), JSON.stringify(selected.id));
       if (supabase && user) {
-        await supabase.from("profiles").upsert({ id: user.id, name: profile.name ?? user.user_metadata.name ?? "", phone: profile.phone ?? "" });
+        await supabase.from("profiles").upsert({ id: user.id, name: profile.name ?? user.user_metadata.name ?? user.user_metadata.full_name ?? "", phone: profile.phone ?? user.user_metadata.phone ?? "" });
         await supabase.from("onboarding_preferences").upsert({ user_id: user.id, discovery_channel: channel, selected_plan: plan, onboarding_completed: true });
         await supabase.from("subscriptions").upsert({ user_id: user.id, plan, status: "active" });
       }
