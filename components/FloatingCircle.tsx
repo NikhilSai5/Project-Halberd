@@ -3,7 +3,6 @@
 import React, { useState, useEffect, useRef, useCallback, useContext } from "react";
 import { SettingsContext, type Habit, type TodoGroup } from "@/lib/SettingsContext";
 import AnimatedEmoji from "@/components/AnimatedEmoji";
-import DynamicIsland from "@/components/smoothui/dynamic-island";
 import { browser } from "wxt/browser";
 
 const STORAGE_KEY = "halberd_floating_circle_pos";
@@ -131,11 +130,19 @@ export default function FloatingCircle() {
 
   const confirmTimerRef = useRef<any>(null);
   const hoverTimeoutRef = useRef<any>(null);
+  const dragFrameRef = useRef<number | null>(null);
+  const pendingPositionRef = useRef<Position | null>(null);
   const dragOffsetRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
   const startPosRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
   const isDraggingRef = useRef(false);
   const positionRef = useRef(position);
   positionRef.current = position;
+
+  useEffect(() => {
+    return () => {
+      if (dragFrameRef.current !== null) window.cancelAnimationFrame(dragFrameRef.current);
+    };
+  }, []);
 
   // Active list of all habits
   const allHabits = contextHabits && contextHabits.length > 0 ? contextHabits : storedHabits;
@@ -470,8 +477,15 @@ export default function FloatingCircle() {
     const rawX = e.clientX - dragOffsetRef.current.x;
     const rawY = e.clientY - dragOffsetRef.current.y;
     const clamped = clampPosition(rawX, rawY);
+    positionRef.current = clamped;
+    pendingPositionRef.current = clamped;
 
-    setPosition(clamped);
+    if (dragFrameRef.current !== null) return;
+    dragFrameRef.current = window.requestAnimationFrame(() => {
+      dragFrameRef.current = null;
+      const nextPosition = pendingPositionRef.current;
+      if (nextPosition) setPosition(nextPosition);
+    });
   };
 
   const handlePointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
@@ -486,6 +500,12 @@ export default function FloatingCircle() {
 
     setIsDragging(false);
     isDraggingRef.current = false;
+
+    if (dragFrameRef.current !== null) {
+      window.cancelAnimationFrame(dragFrameRef.current);
+      dragFrameRef.current = null;
+    }
+    pendingPositionRef.current = null;
 
     const distMoved = Math.hypot(
       e.clientX - startPosRef.current.x,
@@ -513,6 +533,11 @@ export default function FloatingCircle() {
       try {
         e.currentTarget.releasePointerCapture(e.pointerId);
       } catch {}
+      if (dragFrameRef.current !== null) {
+        window.cancelAnimationFrame(dragFrameRef.current);
+        dragFrameRef.current = null;
+      }
+      pendingPositionRef.current = null;
       setIsDragging(false);
       isDraggingRef.current = false;
     }
@@ -540,31 +565,8 @@ export default function FloatingCircle() {
     ? `Click to complete "${currentHabit.name}"`
     : "Halberd";
 
-  const islandContent = (
-    <div
-      style={{
-        pointerEvents: "none",
-        userSelect: "none",
-        WebkitUserSelect: "none",
-        display: "inline-flex",
-        alignItems: "center",
-        justifyContent: "center",
-        transform: isTransitioning
-          ? "scale(0.7) rotate(-10deg)"
-          : isConfirming
-          ? "scale(1.15)"
-          : "scale(1) rotate(0deg)",
-        opacity: isTransitioning ? 0.4 : 1,
-        transition: "transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.2s ease",
-      }}
-    >
-      <AnimatedEmoji emoji={displayEmoji} size={24} />
-    </div>
-  );
-
-  // Position tooltip above or below circle based on screen clearance
-   const isNearTop = position.y < 60;
-   const isNearRight = typeof window !== "undefined" && position.x > window.innerWidth - 180;
+   // Keep the confirmation tooltip beside the circle.
+    const tooltipOnRight = typeof window !== "undefined" && position.x < window.innerWidth / 2;
 
   // Satellite geometry
    const mainCX = position.x + CIRCLE_SIZE / 2;
@@ -596,8 +598,7 @@ export default function FloatingCircle() {
         const isHov = hoveredSatelliteId === group.id;
         const satAbsX = mainCX + offset.x;
         const satAbsY = mainCY + offset.y;
-        const tooltipOnLeft = typeof window !== "undefined" && satAbsX > window.innerWidth / 2;
-        const tooltipOnTop = typeof window !== "undefined" && satAbsY > window.innerHeight * 0.6;
+         const tooltipOnRight = typeof window !== "undefined" && satAbsX < window.innerWidth / 2;
 
         return (
           <div
@@ -661,9 +662,9 @@ export default function FloatingCircle() {
               <div
                 style={{
                   position: "absolute",
-                  [tooltipOnTop ? "bottom" : "top"]: `${SATELLITE_SIZE + 8}px`,
-                  [tooltipOnLeft ? "right" : "left"]: "50%",
-                  transform: tooltipOnLeft ? "translateX(50%)" : "translateX(-50%)",
+                   [tooltipOnRight ? "left" : "right"]: `${SATELLITE_SIZE + 8}px`,
+                   top: "50%",
+                   transform: "translateY(-50%)",
                    backgroundColor: "#0a121e",
                   color: "#e8f0ea",
                   padding: "8px 13px",
@@ -745,9 +746,9 @@ export default function FloatingCircle() {
         <div
           style={{
             position: "absolute",
-             [isNearTop ? "top" : "bottom"]: `${CIRCLE_SIZE + 10}px`,
-            [isNearRight ? "right" : "left"]: isNearRight ? "0px" : "50%",
-            transform: isNearRight ? "none" : "translateX(-50%)",
+             [tooltipOnRight ? "left" : "right"]: `${CIRCLE_SIZE + 10}px`,
+             top: "50%",
+             transform: "translateY(-50%)",
              backgroundColor: "#0f172a",
             color: "#ffffff",
             padding: "7px 14px",
@@ -769,44 +770,48 @@ export default function FloatingCircle() {
         </div>
       )}
 
-       {/* SmoothUI Dynamic Island is the complete floating surface. */}
-       <DynamicIsland
-         compact
-         idleContent={islandContent}
-         ringContent={islandContent}
-         shape="circle"
-         showControls={false}
+        <div
           style={{
             position: "absolute",
-            inset: 0,
+            left: 0,
+            top: 0,
             width: `${CIRCLE_SIZE}px`,
             height: `${CIRCLE_SIZE}px`,
+            boxSizing: "border-box",
+            borderRadius: "50%",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            backgroundColor: isConfirming ? "#e8f7ec" : justCompletedHabit ? "#fff4dc" : "#eff8f1",
+            border: isConfirming ? "2px solid #5cbe70" : justCompletedHabit ? "2px solid #d5aa5c" : "1px solid #8fb69a",
+            boxShadow: isDragging
+              ? "0 10px 18px rgba(54, 82, 61, 0.2), 0 0 0 2px #76a67f"
+              : isConfirming
+              ? "0 8px 16px rgba(54, 139, 74, 0.18), 0 0 0 1px #5cbe70"
+              : justCompletedHabit
+              ? "0 8px 16px rgba(183, 132, 50, 0.16), 0 0 0 1px #d5aa5c"
+              : isHovered
+              ? "0 8px 16px rgba(54, 82, 61, 0.16), 0 0 0 1px #76a67f"
+              : "0 5px 12px rgba(54, 82, 61, 0.14)",
             pointerEvents: "none",
-            zIndex: 2,
           }}
-          surfaceStyle={{
-            background: isConfirming
-             ? "#e8f7ec"
-             : justCompletedHabit
-             ? "#fff4dc"
-             : "#eff8f1",
-           border: isConfirming
-             ? "2px solid #5cbe70"
-             : justCompletedHabit
-             ? "2px solid #d5aa5c"
-             : "1px solid #8fb69a",
-           boxShadow: isDragging
-             ? "0 18px 28px rgba(54, 82, 61, 0.2), 0 0 0 2px #76a67f"
-             : isConfirming
-             ? "0 12px 24px rgba(54, 139, 74, 0.2), 0 0 0 2px #5cbe70"
-             : justCompletedHabit
-             ? "0 12px 24px rgba(183, 132, 50, 0.18), 0 0 0 2px #d5aa5c"
-             : isHovered
-             ? "0 12px 24px rgba(54, 82, 61, 0.18), 0 0 0 1px #76a67f"
-             : "0 8px 18px rgba(54, 82, 61, 0.16), 0 0 0 1px #8fb69a",
-          }}
-          view={isConfirming ? "ring" : "idle"}
-       />
+        >
+          <div
+            style={{
+              pointerEvents: "none",
+              userSelect: "none",
+              WebkitUserSelect: "none",
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              transform: isTransitioning ? "scale(0.7) rotate(-10deg)" : isConfirming ? "scale(1.1)" : "scale(1)",
+              opacity: isTransitioning ? 0.4 : 1,
+              transition: "transform 0.2s ease, opacity 0.2s ease",
+            }}
+          >
+            <AnimatedEmoji emoji={displayEmoji} size={24} />
+          </div>
+        </div>
       </div>
     </>
   );
