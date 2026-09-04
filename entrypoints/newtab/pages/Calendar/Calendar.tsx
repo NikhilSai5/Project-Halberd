@@ -1,11 +1,13 @@
 "use client";
 
 import { useState, useEffect, useMemo, useRef } from "react";
+import { useAuth } from "@/lib/AuthContext";
+import { createGoogleEvent, getGoogleConnection, listGoogleEvents, updateGoogleEvent, deleteGoogleEvent, type GoogleEvent } from "@/lib/googleIntegrations";
 
 type ViewMode = "day" | "week" | "month";
 
 interface CalendarEvent {
-  id: number;
+  id: string;
   title: string;
   startHour: number;
   startMinute: number;
@@ -17,22 +19,32 @@ interface CalendarEvent {
   dayOfWeek?: number;
   /** 1-based day of month — used for month view */
   dayOfMonth?: number;
+  startDate?: string;
+  google?: boolean;
 }
 
 type EventVariant = "standard" | "review" | "break" | "deepWork";
 
-const events: CalendarEvent[] = [
-  { id: 1, title: "Team Standup", startHour: 9, startMinute: 0, endHour: 9, endMinute: 30, variant: "standard", dayOfWeek: 1, dayOfMonth: 25 },
-  { id: 2, title: "Design Review", startHour: 10, startMinute: 30, endHour: 11, endMinute: 30, variant: "review", dayOfWeek: 1, dayOfMonth: 25 },
-  { id: 3, title: "Lunch Break", startHour: 12, startMinute: 0, endHour: 13, endMinute: 0, variant: "break", icon: "restaurant", dayOfWeek: 1, dayOfMonth: 25 },
-  { id: 4, title: "Deep Work", startHour: 14, startMinute: 0, endHour: 15, endMinute: 30, variant: "deepWork", icon: "psychology", dayOfWeek: 1, dayOfMonth: 25 },
-  { id: 5, title: "Sprint Planning", startHour: 9, startMinute: 0, endHour: 10, endMinute: 0, variant: "review", dayOfWeek: 2, dayOfMonth: 26 },
-  { id: 6, title: "Code Review", startHour: 11, startMinute: 0, endHour: 12, endMinute: 0, variant: "standard", dayOfWeek: 3, dayOfMonth: 27 },
-  { id: 7, title: "1:1 Meeting", startHour: 14, startMinute: 0, endHour: 14, endMinute: 30, variant: "standard", dayOfWeek: 3, dayOfMonth: 27 },
-  { id: 8, title: "Deep Work", startHour: 10, startMinute: 0, endHour: 12, endMinute: 0, variant: "deepWork", icon: "psychology", dayOfWeek: 4, dayOfMonth: 28 },
-  { id: 9, title: "Retro", startHour: 15, startMinute: 0, endHour: 16, endMinute: 0, variant: "review", dayOfWeek: 5, dayOfMonth: 29 },
-  { id: 10, title: "Lunch Break", startHour: 12, startMinute: 0, endHour: 13, endMinute: 0, variant: "break", icon: "restaurant", dayOfWeek: 2, dayOfMonth: 26 },
-];
+const defaultEvents: CalendarEvent[] = [
+  { id: "1", title: "Team Standup", startHour: 9, startMinute: 0, endHour: 9, endMinute: 30, variant: "standard", dayOfWeek: 1, dayOfMonth: 25 },
+  { id: "2", title: "Design Review", startHour: 10, startMinute: 30, endHour: 11, endMinute: 30, variant: "review", dayOfWeek: 1, dayOfMonth: 25 },
+  { id: "3", title: "Lunch Break", startHour: 12, startMinute: 0, endHour: 13, endMinute: 0, variant: "break", icon: "restaurant", dayOfWeek: 1, dayOfMonth: 25 },
+  { id: "4", title: "Deep Work", startHour: 14, startMinute: 0, endHour: 15, endMinute: 30, variant: "deepWork", icon: "psychology", dayOfWeek: 1, dayOfMonth: 25 },
+  { id: "5", title: "Sprint Planning", startHour: 9, startMinute: 0, endHour: 10, endMinute: 0, variant: "review", dayOfWeek: 2, dayOfMonth: 26 },
+  { id: "6", title: "Code Review", startHour: 11, startMinute: 0, endHour: 12, endMinute: 0, variant: "standard", dayOfWeek: 3, dayOfMonth: 27 },
+  { id: "7", title: "1:1 Meeting", startHour: 14, startMinute: 0, endHour: 14, endMinute: 30, variant: "standard", dayOfWeek: 3, dayOfMonth: 27 },
+  { id: "8", title: "Deep Work", startHour: 10, startMinute: 0, endHour: 12, endMinute: 0, variant: "deepWork", icon: "psychology", dayOfWeek: 4, dayOfMonth: 28 },
+  { id: "9", title: "Retro", startHour: 15, startMinute: 0, endHour: 16, endMinute: 0, variant: "review", dayOfWeek: 5, dayOfMonth: 29 },
+  { id: "10", title: "Lunch Break", startHour: 12, startMinute: 0, endHour: 13, endMinute: 0, variant: "break", icon: "restaurant", dayOfWeek: 2, dayOfMonth: 26 },
+]; 
+
+function toCalendarEvent(event: GoogleEvent): CalendarEvent {
+  const startValue = event.start.dateTime || `${event.start.date}T09:00:00`;
+  const endValue = event.end.dateTime || `${event.end.date}T10:00:00`;
+  const start = new Date(startValue);
+  const end = new Date(endValue);
+  return { id: event.id, title: event.summary || "Untitled event", startHour: start.getHours(), startMinute: start.getMinutes(), endHour: end.getHours(), endMinute: end.getMinutes(), variant: "standard", startDate: start.toISOString().slice(0, 10), google: true };
+}
 
 const eventStyles: Record<EventVariant, { containerClass: string; titleClass: string; centered: boolean; showTime: boolean }> = {
   standard: {
@@ -118,10 +130,68 @@ const isSameDay = (a: Date, b: Date) =>
   a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
 
 export default function Calendar() {
+  const { user } = useAuth();
+  const [events, setEvents] = useState<CalendarEvent[]>(defaultEvents);
+  const [syncing, setSyncing] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
   const [currentDate, setCurrentDate] = useState(new Date());
   const [currentTime, setCurrentTime] = useState({ hour: 13, minute: 20 });
   const [view, setView] = useState<ViewMode>("day");
   const calendarBodyRef = useRef<HTMLDivElement>(null);
+
+  const syncCalendar = async () => {
+    if (!user || !getGoogleConnection(user.id).calendar) return;
+    setSyncing(true);
+    setMessage(null);
+    try {
+      const googleEvents = await listGoogleEvents(user.id);
+      setEvents(googleEvents.filter((event) => event.status !== "cancelled").map(toCalendarEvent));
+      setMessage(`${googleEvents.length} Google Calendar events synced.`);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Unable to sync Google Calendar.");
+    } finally {
+      setSyncing(false);
+    }
+  };
+
+  useEffect(() => {
+    void syncCalendar();
+    if (!user?.id || !getGoogleConnection(user.id).calendar) return;
+    const interval = window.setInterval(() => void syncCalendar(), 5 * 60 * 1000);
+    return () => window.clearInterval(interval);
+  }, [user?.id]);
+
+  const editEvent = async (event: CalendarEvent) => {
+    if (!event.google || !user) return;
+    const title = window.prompt("Event title", event.title);
+    if (!title || title === event.title) return;
+    try {
+      await updateGoogleEvent(user.id, event.id, { summary: title });
+      setEvents((items) => items.map((item) => item.id === event.id ? { ...item, title } : item));
+    } catch (error) { setMessage(error instanceof Error ? error.message : "Unable to update event."); }
+  };
+
+  const removeEvent = async (event: CalendarEvent) => {
+    if (!event.google || !user || !window.confirm(`Delete “${event.title}”?`)) return;
+    try {
+      await deleteGoogleEvent(user.id, event.id);
+      setEvents((items) => items.filter((item) => item.id !== event.id));
+    } catch (error) { setMessage(error instanceof Error ? error.message : "Unable to delete event."); }
+  };
+
+  const addEvent = async () => {
+    if (!user || !getGoogleConnection(user.id).calendar) return;
+    const title = window.prompt("New event title");
+    if (!title) return;
+    const start = new Date(currentDate);
+    start.setHours(9, 0, 0, 0);
+    const end = new Date(start);
+    end.setHours(10);
+    try {
+      const created = await createGoogleEvent(user.id, { summary: title, start: { dateTime: start.toISOString() }, end: { dateTime: end.toISOString() } });
+      setEvents((items) => [...items, toCalendarEvent(created)]);
+    } catch (error) { setMessage(error instanceof Error ? error.message : "Unable to create event."); }
+  };
 
   useEffect(() => {
     const updateTime = () => {
@@ -205,7 +275,7 @@ export default function Calendar() {
   const getEventsForDate = (date: Date) => {
     const dow = date.getDay();
     const dom = date.getDate();
-    return events.filter((e) => e.dayOfWeek === dow && e.dayOfMonth === dom);
+    return events.filter((e) => e.startDate ? e.startDate === date.toISOString().slice(0, 10) : e.dayOfWeek === dow && e.dayOfMonth === dom);
   };
 
   const navLabel = view === "day" ? "Previous day" : view === "week" ? "Previous week" : "Previous month";
@@ -216,6 +286,7 @@ export default function Calendar() {
       <main className="workspace-surface workspace-container workspace-calendar calendar-panel w-full flex flex-col relative z-0 overflow-hidden">
         <header className="calendar-header border-b border-border-subtle bg-surface-white z-10">
           <h1 className="page-title text-text-primary">Calendar</h1>
+          {message && <p className="label-copy text-text-secondary" role="status">{message}</p>}
         </header>
         <div className="calendar-toolbar bg-surface-white border-b border-border-subtle z-10">
           <div className="flex items-center gap-4 min-w-0">
@@ -224,6 +295,8 @@ export default function Calendar() {
             </div>
           </div>
           <div className="calendar-actions">
+            {getGoogleConnection(user?.id).calendar && <button type="button" onClick={() => void syncCalendar()} disabled={syncing} className="button-compact calendar-secondary-action bg-surface-container-low text-text-primary font-label-secondary text-label-secondary disabled:opacity-50">{syncing ? "Syncing..." : "Sync"}</button>}
+            {getGoogleConnection(user?.id).calendar && <button type="button" onClick={() => void addEvent()} className="button-compact button-primary font-label-secondary text-label-secondary">+ Event</button>}
             <div className="calendar-view-switcher">
               {(["day", "week", "month"] as ViewMode[]).map((v) => (
                 <button
@@ -267,13 +340,16 @@ export default function Calendar() {
                   </div>
                 ))}
                 <div className="calendar-event-layer absolute top-0 left-16 right-0 bottom-0 pointer-events-none">
-                  {events.map((event) => {
+                  {getEventsForDate(currentDate).map((event) => {
                     const eventStyle = eventStyles[event.variant];
                     return (
-                      <div
+                             <div
                         key={event.id}
                         className={`calendar-event absolute left-2 right-4 pointer-events-auto flex flex-col justify-start overflow-hidden ${eventStyle.containerClass} ${eventStyle.centered ? "calendar-event--centered" : ""}`}
                         style={{ top: getTop(event.startHour, event.startMinute), height: getHeight(event.startHour, event.startMinute, event.endHour, event.endMinute) }}
+                        onClick={() => void editEvent(event)}
+                        onContextMenu={(e) => { e.preventDefault(); void removeEvent(event); }}
+                        title={event.google ? "Click to edit, right-click to delete" : undefined}
                       >
                         {event.icon ? (
                           <div className={`${eventStyle.titleClass} flex items-center gap-2`}>
@@ -377,14 +453,16 @@ export default function Calendar() {
                           {dayEvents.map((event) => {
                             const eventStyle = eventStyles[event.variant];
                             return (
-                              <div
-                                key={event.id}
+                               <div
+                                 key={event.id}
                                 className={`calendar-event absolute left-0.5 right-1 pointer-events-auto flex flex-col justify-start overflow-hidden ${eventStyle.containerClass} ${eventStyle.centered ? "calendar-event--centered" : ""}`}
-                                style={{
+                                 style={{
                                   top: getTop(event.startHour, event.startMinute),
                                   height: getHeight(event.startHour, event.startMinute, event.endHour, event.endMinute),
-                                }}
-                              >
+                                 }}
+                                 onClick={() => void editEvent(event)}
+                                 onContextMenu={(e) => { e.preventDefault(); void removeEvent(event); }}
+                               >
                                 {event.icon ? (
                                   <div className={`${eventStyle.titleClass} flex items-center gap-1`}>
                                     <span className="material-symbols-outlined icon-inline text-[14px]" aria-hidden="true">{event.icon}</span>
@@ -444,8 +522,9 @@ export default function Calendar() {
                             <div
                               key={event.id}
                               className="calendar-month-event truncate rounded px-1 py-0.5"
-                              style={{ backgroundColor: `${variantColor}20`, color: variantColor, fontSize: "10px", lineHeight: "14px", fontWeight: 500 }}
-                            >
+                               style={{ backgroundColor: `${variantColor}20`, color: variantColor, fontSize: "10px", lineHeight: "14px", fontWeight: 500 }}
+                               onClick={() => void editEvent(event)}
+                             >
                               {event.title}
                             </div>
                           );

@@ -1,9 +1,20 @@
 "use client";
 
-import { createContext, useContext, useState, useEffect, type ReactNode } from "react";
+import { createContext, useContext, useState, useEffect, useRef, type ReactNode } from "react";
 import { browser } from "wxt/browser";
 import { useAuth } from "@/lib/AuthContext";
 import { userStorageKey } from "@/lib/userStorage";
+import {
+  createGoogleTask,
+  createGoogleTaskList,
+  deleteGoogleTask,
+  deleteGoogleTaskList,
+  getGoogleConnection,
+  listGoogleTasks,
+  listGoogleTaskLists,
+  updateGoogleTask,
+  updateGoogleTaskList,
+} from "@/lib/googleIntegrations";
 import {
   getWallpapers,
   addWallpaperToDB,
@@ -34,12 +45,16 @@ export interface TodoItem {
   id: string;
   text: string;
   completed: boolean;
+  googleTaskId?: string;
+  googleTaskUpdatedAt?: string;
 }
 
 export interface TodoGroup {
   id: string;
   name: string;
   todos: TodoItem[];
+  googleTaskListId?: string;
+  googleTaskListUpdatedAt?: string;
 }
 
 export interface Habit {
@@ -186,6 +201,11 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   });
   const [weeklyGoals, setWeeklyGoals] = useState<WeeklyGoal[]>([]);
   const [productiveSessions, setProductiveSessions] = useState<ProductiveSession[]>([]);
+  const todoGroupsRef = useRef(todoGroups);
+  const syncingGoogleTasks = useRef(false);
+  const deletedGoogleTaskIds = useRef(new Set<string>());
+  const deletedGoogleTaskListIds = useRef(new Set<string>());
+  todoGroupsRef.current = todoGroups;
 
   const setSlideshowSettings = (settings: Partial<SlideshowSettings> | ((prev: SlideshowSettings) => SlideshowSettings)) => {
     setSlideshowSettingsState(prev => 
@@ -446,6 +466,93 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     } catch {}
   }, [todoGroups, initialized, user?.id]);
 
+  // Todo data stays local-first. When Tasks is connected, this merge makes each
+  // Halberd group correspond to a Google task list and each todo to a task.
+  useEffect(() => {
+    if (!initialized || !user || !getGoogleConnection(user.id).tasks || syncingGoogleTasks.current) return;
+    let cancelled = false;
+    const sync = async () => {
+      syncingGoogleTasks.current = true;
+      try {
+        const [remoteLists, remoteTasks] = await Promise.all([
+          listGoogleTaskLists(user.id),
+          listGoogleTasks(user.id),
+        ]);
+        const localGroups = todoGroupsRef.current;
+        const usedLists = new Set<string>();
+        const syncedGroups: TodoGroup[] = [];
+
+        for (const group of localGroups) {
+          let remoteList = remoteLists.find((list) => list.id === group.googleTaskListId);
+          if (!remoteList) remoteList = remoteLists.find((list) => !usedLists.has(list.id) && list.title === group.name);
+          if (!remoteList) remoteList = await createGoogleTaskList(user.id, group.name);
+          usedLists.add(remoteList.id);
+
+          let syncedList = remoteList;
+          if (remoteList.title !== group.name) {
+            syncedList = await updateGoogleTaskList(user.id, { ...remoteList, title: group.name });
+          }
+
+          const listTasks = remoteTasks.filter((task) => task.listId === syncedList.id && !deletedGoogleTaskIds.current.has(task.id));
+          const usedTasks = new Set<string>();
+          const syncedTodos: TodoItem[] = [];
+          for (const todo of group.todos) {
+            let remoteTask = listTasks.find((task) => task.id === todo.googleTaskId);
+            if (!remoteTask && !todo.googleTaskId) remoteTask = listTasks.find((task) => !usedTasks.has(task.id) && task.title === todo.text);
+            if (remoteTask) {
+              usedTasks.add(remoteTask.id);
+              const remoteIsNewer = Boolean(todo.googleTaskUpdatedAt && remoteTask.updated && Date.parse(remoteTask.updated) > Date.parse(todo.googleTaskUpdatedAt));
+              const syncedTask = remoteIsNewer
+                ? remoteTask
+                : remoteTask.title !== todo.text || remoteTask.status !== (todo.completed ? "completed" : "needsAction")
+                  ? await updateGoogleTask(user.id, { ...remoteTask, title: todo.text, status: todo.completed ? "completed" : "needsAction" })
+                  : remoteTask;
+              syncedTodos.push({ ...todo, text: syncedTask.title, completed: syncedTask.status === "completed", googleTaskId: syncedTask.id, googleTaskUpdatedAt: syncedTask.updated });
+            } else if (todo.googleTaskId) {
+              // The task was deleted in Google Tasks; mirror that deletion locally.
+            } else {
+              const created = await createGoogleTask(user.id, syncedList.id, { title: todo.text || "Untitled task", status: todo.completed ? "completed" : "needsAction" });
+              syncedTodos.push({ ...todo, text: created.title, googleTaskId: created.id, googleTaskUpdatedAt: created.updated });
+            }
+          }
+
+          for (const task of listTasks) {
+            if (!usedTasks.has(task.id)) {
+              syncedTodos.push({ id: `google-${task.id}`, text: task.title, completed: task.status === "completed", googleTaskId: task.id, googleTaskUpdatedAt: task.updated });
+            }
+          }
+          syncedGroups.push({ ...group, name: syncedList.title, todos: syncedTodos, googleTaskListId: syncedList.id, googleTaskListUpdatedAt: syncedList.updated });
+        }
+
+        for (const remoteList of remoteLists) {
+          if (usedLists.has(remoteList.id) || deletedGoogleTaskListIds.current.has(remoteList.id)) continue;
+          const todos = remoteTasks.filter((task) => task.listId === remoteList.id && !deletedGoogleTaskIds.current.has(task.id)).map((task) => ({ id: `google-${task.id}`, text: task.title, completed: task.status === "completed", googleTaskId: task.id, googleTaskUpdatedAt: task.updated }));
+          syncedGroups.push({ id: `google-list-${remoteList.id}`, name: remoteList.title, todos, googleTaskListId: remoteList.id, googleTaskListUpdatedAt: remoteList.updated });
+        }
+
+        if (!cancelled && JSON.stringify(syncedGroups) !== JSON.stringify(todoGroupsRef.current)) setTodoGroups(syncedGroups);
+      } catch {
+        // A local todo list must continue working when Google is unavailable.
+      } finally {
+        syncingGoogleTasks.current = false;
+      }
+    };
+    void sync();
+    return () => { cancelled = true; };
+  }, [todoGroups, initialized, user?.id]);
+
+  useEffect(() => {
+    const handleTasksConnected = () => setTodoGroups((groups) => [...groups]);
+    window.addEventListener("halberd-google-tasks-connected", handleTasksConnected);
+    return () => window.removeEventListener("halberd-google-tasks-connected", handleTasksConnected);
+  }, []);
+
+  useEffect(() => {
+    if (!initialized || !user || !getGoogleConnection(user.id).tasks) return;
+    const interval = window.setInterval(() => setTodoGroups((groups) => [...groups]), 5 * 60 * 1000);
+    return () => window.clearInterval(interval);
+  }, [initialized, user?.id]);
+
   useEffect(() => {
     if (!initialized || !user) return;
     localStorage.setItem(userStorageKey(user.id, "habits"), JSON.stringify(habits));
@@ -517,6 +624,11 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
 
   const deleteTodoGroup = (groupId: string) => {
     if (todoGroups.length <= 1) return;
+    const group = todoGroups.find((item) => item.id === groupId);
+    if (user && group?.googleTaskListId && getGoogleConnection(user.id).tasks) {
+      deletedGoogleTaskListIds.current.add(group.googleTaskListId);
+      void deleteGoogleTaskList(user.id, group.googleTaskListId);
+    }
     setTodoGroups((prev) => prev.filter((g) => g.id !== groupId));
   };
 
@@ -549,6 +661,12 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   };
 
   const deleteTodo = (groupId: string, todoId: string) => {
+    const group = todoGroups.find((item) => item.id === groupId);
+    const todo = group?.todos.find((item) => item.id === todoId);
+    if (user && todo?.googleTaskId && group?.googleTaskListId && getGoogleConnection(user.id).tasks) {
+      deletedGoogleTaskIds.current.add(todo.googleTaskId);
+      void deleteGoogleTask(user.id, { id: todo.googleTaskId, listId: group.googleTaskListId, title: todo.text, status: todo.completed ? "completed" : "needsAction" });
+    }
     setTodoGroups((prev) =>
       prev.map((g) =>
         g.id === groupId

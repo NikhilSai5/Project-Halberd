@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from "react";
 import { useSettings, type TodoGroup, type TodoItem, type WallpaperFile } from '@/lib/SettingsContext';
 import { useAuth } from '@/lib/AuthContext';
+import { connectGoogle, getGoogleConnection, listGoogleTasks, updateGoogleTask, type GoogleTask } from '@/lib/googleIntegrations';
 import { userStorageKey } from '@/lib/userStorage';
 import defaultWallpaperOne from '@/assets/default wallpapers/wallhaven-d6q21o.jpg';
 import defaultWallpaperTwo from '@/assets/default wallpapers/wallhaven-l87z7l.jpg';
@@ -117,6 +118,43 @@ export default function Settings() {
 
   // Productivity state
   const [expandedGroupIds, setExpandedGroupIds] = useState<Set<string>>(new Set());
+  const [showNewGroupDialog, setShowNewGroupDialog] = useState(false);
+  const [newGroupName, setNewGroupName] = useState("");
+  const [connectionBusy, setConnectionBusy] = useState<"calendar" | "tasks" | null>(null);
+  const [connectionMessage, setConnectionMessage] = useState<string | null>(null);
+  const [googleTasks, setGoogleTasks] = useState<GoogleTask[]>([]);
+  const [connections, setConnections] = useState(() => getGoogleConnection(user?.id));
+
+  useEffect(() => {
+    setConnections(getGoogleConnection(user?.id));
+    if (user?.id && getGoogleConnection(user.id).tasks) {
+      void listGoogleTasks(user.id).then(setGoogleTasks).catch(() => setGoogleTasks([]));
+    }
+  }, [user?.id]);
+
+  const connectService = async (service: "calendar" | "tasks") => {
+    if (!user) return;
+    setConnectionBusy(service);
+    setConnectionMessage(null);
+    try {
+      await connectGoogle(user.id, service);
+      setConnections(getGoogleConnection(user.id));
+      if (service === "tasks") window.dispatchEvent(new Event("halberd-google-tasks-connected"));
+      if (service === "tasks") setGoogleTasks(await listGoogleTasks(user.id));
+      setConnectionMessage(`${service === "calendar" ? "Google Calendar" : "Google Tasks"} connected.`);
+    } catch (error) {
+      setConnectionMessage(error instanceof Error ? error.message : "Unable to connect Google.");
+    } finally {
+      setConnectionBusy(null);
+    }
+  };
+
+  const toggleGoogleTask = async (task: GoogleTask) => {
+    if (!user) return;
+    const next = { ...task, status: task.status === "completed" ? "needsAction" : "completed" } as GoogleTask;
+    setGoogleTasks((items) => items.map((item) => item.id === task.id && item.listId === task.listId ? next : item));
+    try { await updateGoogleTask(user.id, next); } catch { setGoogleTasks((items) => items.map((item) => item.id === task.id && item.listId === task.listId ? task : item)); }
+  };
 
   const toggleGroupExpand = (groupId: string) => {
     setExpandedGroupIds(prev => {
@@ -234,6 +272,14 @@ export default function Settings() {
 
     // Reset input value to allow re-uploading same file
     if (e.target) e.target.value = "";
+  };
+
+  const confirmNewGroup = () => {
+    const name = newGroupName.trim();
+    if (!name) return;
+    addTodoGroup(name);
+    setNewGroupName("");
+    setShowNewGroupDialog(false);
   };
 
   const selectDefaultWallpaper = (wallpaper: WallpaperFile) => {
@@ -862,7 +908,7 @@ export default function Settings() {
                     <div className="settings-section">
                       <div className="flex items-center justify-between mb-4">
                         <h4 className="section-heading text-text-primary">Todo Groups</h4>
-                        <button onClick={() => addTodoGroup()} className="button-regular font-section-title text-section-title group">
+                        <button onClick={() => { setNewGroupName(""); setShowNewGroupDialog(true); }} className="button-regular font-section-title text-section-title group">
                           <span className="material-symbols-outlined text-[18px] group-hover:rotate-90 transition-transform duration-300" style={{ fontVariationSettings: "'FILL' 1" }}>add</span>
                           Add Group
                         </button>
@@ -1281,8 +1327,8 @@ export default function Settings() {
                             <div className="font-body-main text-body-main text-on-surface font-medium">Google Calendar</div>
                             <div className="label-copy text-text-secondary">Sync your events and schedule</div>
                           </div>
-                          <button type="button" className="button-regular button-primary font-label-secondary text-label-secondary flex-shrink-0">
-                            Connect
+                          <button type="button" onClick={() => void connectService("calendar")} disabled={connectionBusy !== null} className="button-regular button-primary font-label-secondary text-label-secondary flex-shrink-0 disabled:opacity-50">
+                            {connectionBusy === "calendar" ? "Connecting..." : connections.calendar ? "Reconnect" : "Connect"}
                           </button>
                         </div>
                         <div className="flex items-center gap-4 p-4 rounded-xl bg-surface-container-low border border-border-subtle">
@@ -1293,10 +1339,22 @@ export default function Settings() {
                             <div className="font-body-main text-body-main text-on-surface font-medium">Google Tasks</div>
                             <div className="label-copy text-text-secondary">Manage your tasks and to-dos</div>
                           </div>
-                          <button type="button" className="button-regular button-primary font-label-secondary text-label-secondary flex-shrink-0">
-                            Connect
+                          <button type="button" onClick={() => void connectService("tasks")} disabled={connectionBusy !== null} className="button-regular button-primary font-label-secondary text-label-secondary flex-shrink-0 disabled:opacity-50">
+                            {connectionBusy === "tasks" ? "Connecting..." : connections.tasks ? "Reconnect" : "Connect"}
                           </button>
                         </div>
+                        {connectionMessage && <p className="label-copy text-text-secondary" role="status">{connectionMessage}</p>}
+                        {connections.tasks && googleTasks.length > 0 && (
+                          <div className="rounded-xl border border-border-subtle p-4 space-y-2">
+                            <div className="section-heading text-text-primary">Google Tasks</div>
+                            {googleTasks.map((task) => (
+                              <label key={`${task.listId}-${task.id}`} className="flex items-center gap-3 text-sm text-text-primary">
+                                <input type="checkbox" checked={task.status === "completed"} onChange={() => void toggleGoogleTask(task)} />
+                                <span className={task.status === "completed" ? "line-through text-text-muted" : ""}>{task.title}</span>
+                              </label>
+                            ))}
+                          </div>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -1620,6 +1678,22 @@ export default function Settings() {
           </section>
         </div>
       </main>
+      {showNewGroupDialog && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 px-4" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setShowNewGroupDialog(false); }}>
+          <form onSubmit={(event) => { event.preventDefault(); confirmNewGroup(); }} className="w-full max-w-sm rounded-xl bg-surface-white border border-border-subtle p-6 shadow-xl" role="dialog" aria-modal="true" aria-labelledby="new-group-title">
+            <h2 id="new-group-title" className="section-heading text-text-primary">Create todo group</h2>
+            <p className="label-copy text-text-secondary mt-1">This name will also be used for the Google Tasks list when syncing is enabled.</p>
+            <label className="block mt-5">
+              <span className="label-copy text-text-secondary">Group name</span>
+              <input autoFocus value={newGroupName} onChange={(event) => setNewGroupName(event.target.value)} placeholder="e.g. Work" className="mt-2 w-full rounded-lg border border-border-subtle bg-surface-container-low px-3 py-2 text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/30" />
+            </label>
+            <div className="flex justify-end gap-2 mt-6">
+              <button type="button" onClick={() => setShowNewGroupDialog(false)} className="button-regular button-regular--outlined font-label-secondary text-label-secondary">Cancel</button>
+              <button type="submit" disabled={!newGroupName.trim()} className="button-regular button-primary font-label-secondary text-label-secondary disabled:opacity-40 disabled:cursor-not-allowed">Confirm</button>
+            </div>
+          </form>
+        </div>
+      )}
     </div>
   );
 }

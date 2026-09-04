@@ -46,6 +46,7 @@ export default function Home({
 
   const [activeGroupId, setActiveGroupId] =
     useState<string | null>(null);
+  const previousGroupIdsRef = useRef<string[] | null>(null);
 
   const [addingTask, setAddingTask] =
     useState(false);
@@ -418,14 +419,19 @@ export default function Home({
    */
 
   useEffect(() => {
-    if (
-      todoGroups.length > 0 &&
-      !activeGroupId
-    ) {
-      setActiveGroupId(
-        todoGroups[0]!.id
-      );
+    const groupIds = todoGroups.map((group) => group.id);
+    const previousGroupIds = previousGroupIdsRef.current;
+    const newGroup = previousGroupIds
+      ? todoGroups.find((group) => !previousGroupIds.includes(group.id))
+      : undefined;
+
+    if (newGroup) {
+      setActiveGroupId(newGroup.id);
+    } else if (todoGroups.length > 0 && (!activeGroupId || !groupIds.includes(activeGroupId))) {
+      setActiveGroupId(todoGroups[todoGroups.length - 1]!.id);
     }
+
+    previousGroupIdsRef.current = groupIds;
   }, [
     todoGroups,
     activeGroupId,
