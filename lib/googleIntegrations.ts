@@ -6,6 +6,7 @@ export const GOOGLE_TASKS_SCOPE = "https://www.googleapis.com/auth/tasks";
 
 const tokenKey = (userId: string) => `halberd.google.tokens.${userId}`;
 const providerTokenKey = (userId: string) => `halberd.google.provider-token.${userId}`;
+const GOOGLE_AUTHORIZATION_LIFETIME_MS = 30 * 24 * 60 * 60 * 1000;
 
 export interface GoogleTokens {
   accessToken: string;
@@ -59,7 +60,7 @@ function saveTokens(userId: string, accessToken: string, refreshToken?: string):
   localStorage.setItem(tokenKey(userId), JSON.stringify({
     accessToken,
     refreshToken,
-    expiresAt: Date.now() + 55 * 60 * 1000,
+    expiresAt: Date.now() + GOOGLE_AUTHORIZATION_LIFETIME_MS,
   } satisfies GoogleTokens));
 }
 
@@ -80,12 +81,12 @@ function setConnection(userId: string, service: keyof GoogleConnectionState): vo
   }));
 }
 
-async function getExtensionGoogleToken(): Promise<string | null> {
+async function getExtensionGoogleToken(interactive = true): Promise<string | null> {
   const identity = browser.identity as typeof browser.identity & {
     getAuthToken?: (details: { interactive: boolean }) => Promise<string | { token: string }>;
   };
   if (!identity.getAuthToken) return null;
-  const result = await identity.getAuthToken({ interactive: true });
+  const result = await identity.getAuthToken({ interactive });
   return typeof result === "string" ? result : result.token || null;
 }
 
@@ -170,13 +171,48 @@ export async function connectGoogle(userId: string, service: keyof GoogleConnect
   setConnection(userId, service);
 }
 
-async function googleFetch<T>(userId: string, path: string, init?: RequestInit): Promise<T> {
+async function getGoogleAccessToken(userId: string): Promise<string> {
   const tokens = getStoredTokens(userId);
   if (!tokens) throw new Error("Connect Google in Settings before using this integration.");
-  const response = await fetch(`https://www.googleapis.com${path}`, {
+
+  // Chrome can silently rotate identity tokens while the authorization stays connected.
+  try {
+    const extensionToken = await getExtensionGoogleToken(false);
+    if (extensionToken) {
+      if (extensionToken !== tokens.accessToken) saveTokens(userId, extensionToken, tokens.refreshToken);
+      return extensionToken;
+    }
+  } catch {
+    // Fall back to the stored provider token for non-extension OAuth sessions.
+  }
+
+  if (tokens.expiresAt && tokens.expiresAt <= Date.now()) {
+    throw new Error("Google authorization expired. Reconnect this integration in Settings.");
+  }
+  return tokens.accessToken;
+}
+
+async function googleFetch<T>(userId: string, path: string, init?: RequestInit): Promise<T> {
+  const request = (accessToken: string) => fetch(`https://www.googleapis.com${path}`, {
     ...init,
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${tokens.accessToken}`, ...init?.headers },
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}`, ...init?.headers },
   });
+
+  let accessToken = await getGoogleAccessToken(userId);
+  let response = await request(accessToken);
+  if (response.status === 401) {
+    try {
+      const refreshedToken = await getExtensionGoogleToken(false);
+      if (refreshedToken && refreshedToken !== accessToken) {
+        saveTokens(userId, refreshedToken, getStoredTokens(userId)?.refreshToken);
+        accessToken = refreshedToken;
+        response = await request(accessToken);
+      }
+    } catch {
+      // Preserve the authorization error below when silent refresh is unavailable.
+    }
+  }
+
   if (!response.ok) {
     if (response.status === 401) throw new Error("Google authorization expired. Reconnect this integration in Settings.");
     let detail = "";

@@ -13,7 +13,7 @@ import {
   Timer as TimerIcon,
 } from "lucide-react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
-import { type ReactNode, useMemo, useState } from "react";
+import { type CSSProperties, type ReactNode, useMemo, useState } from "react";
 
 const BOUNCE_VARIANTS = {
   idle: 0.5,
@@ -182,9 +182,14 @@ type View = "idle" | "ring" | "timer" | "notification" | "music";
 
 export interface DynamicIslandProps {
   className?: string;
+  compact?: boolean;
   idleContent?: ReactNode;
   onViewChange?: (view: View) => void;
   ringContent?: ReactNode;
+  shape?: "circle" | "pill";
+  showControls?: boolean;
+  surfaceStyle?: CSSProperties;
+  style?: CSSProperties;
   timerContent?: ReactNode;
   view?: View;
 }
@@ -196,6 +201,11 @@ export default function DynamicIsland({
   ringContent,
   timerContent,
   className = "",
+  compact = false,
+  shape = "pill",
+  showControls = true,
+  surfaceStyle,
+  style,
 }: DynamicIslandProps) {
   const [internalView, setInternalView] = useState<View>("idle");
   const [variantKey, setVariantKey] = useState<string>("idle");
@@ -231,12 +241,47 @@ export default function DynamicIsland({
   };
 
   return (
-    <div className={`h-[200px] ${className}`}>
-      <div className="relative flex h-full w-full flex-col justify-center">
+    <div
+      className={`${compact ? "" : "h-[200px]"} ${className}`}
+      style={compact ? { height: "100%", width: "100%", ...style } : style}
+    >
+      <div
+        className="relative flex h-full w-full flex-col justify-center"
+        style={
+          compact
+            ? {
+                alignItems: "center",
+                display: "flex",
+                flexDirection: "column",
+                height: "100%",
+                justifyContent: "center",
+                position: "relative",
+                width: "100%",
+              }
+            : undefined
+        }
+      >
         <motion.div
           className="mx-auto w-fit min-w-[100px] overflow-hidden rounded-full bg-black"
           layout
-          style={{ borderRadius: 32 }}
+          style={
+            compact
+              ? {
+                  alignItems: "center",
+                  background: "#eff8f1",
+                  border: "1px solid #8fb69a",
+                  borderRadius: shape === "circle" ? "50%" : 999,
+                  boxShadow: "0 2px 5px rgba(54, 82, 61, 0.16)",
+                  display: "flex",
+                  height: "100%",
+                  justifyContent: "center",
+                  minWidth: 0,
+                  overflow: "hidden",
+                  width: "100%",
+                  ...surfaceStyle,
+                }
+              : { borderRadius: 32 }
+          }
           transition={
             shouldReduceMotion
               ? { duration: 0 }
@@ -277,35 +322,38 @@ export default function DynamicIsland({
                 DEFAULT_BOUNCE,
               type: "spring" as const,
             }}
+            style={compact ? { alignItems: "center", display: "flex", height: "100%", justifyContent: "center", width: "100%" } : undefined}
           >
             {content}
           </motion.div>
         </motion.div>
 
-        <div className="absolute bottom-2 left-1/2 z-10 flex -translate-x-1/2 justify-center gap-1 rounded-full border bg-background p-1">
-          {[
-            { icon: <CloudLightning className="size-3" />, key: "idle" },
-            { icon: <Phone className="size-3" />, key: "ring" },
-            { icon: <TimerIcon className="size-3" />, key: "timer" },
-            { icon: <Bell className="size-3" />, key: "notification" },
-            { icon: <Music2 className="size-3" />, key: "music" },
-          ].map(({ key, icon }) => (
-            <button
-              aria-label={key}
-              className="flex size-8 cursor-pointer items-center justify-center rounded-full border bg-primary px-2"
-              key={key}
-              onClick={() => {
-                if (view !== key) {
-                  setVariantKey(`${view}-${key}`);
-                  handleViewChange(key as View);
-                }
-              }}
-              type="button"
-            >
-              {icon}
-            </button>
-          ))}
-        </div>
+        {showControls && (
+          <div className="absolute bottom-2 left-1/2 z-10 flex -translate-x-1/2 justify-center gap-1 rounded-full border bg-background p-1">
+            {[
+              { icon: <CloudLightning className="size-3" />, key: "idle" },
+              { icon: <Phone className="size-3" />, key: "ring" },
+              { icon: <TimerIcon className="size-3" />, key: "timer" },
+              { icon: <Bell className="size-3" />, key: "notification" },
+              { icon: <Music2 className="size-3" />, key: "music" },
+            ].map(({ key, icon }) => (
+              <button
+                aria-label={key}
+                className="flex size-8 cursor-pointer items-center justify-center rounded-full border bg-primary px-2"
+                key={key}
+                onClick={() => {
+                  if (view !== key) {
+                    setVariantKey(`${view}-${key}`);
+                    handleViewChange(key as View);
+                  }
+                }}
+                type="button"
+              >
+                {icon}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
