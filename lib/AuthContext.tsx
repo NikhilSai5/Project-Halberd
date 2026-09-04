@@ -20,6 +20,8 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
+const googleProviderTokenKey = (userId: string) => `halberd.google.provider-token.${userId}`;
+
 function authError(error: unknown): Error {
   return error instanceof Error ? error : new Error("Something went wrong. Please try again.");
 }
@@ -39,11 +41,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     supabase.auth.getSession().then(({ data, error: sessionError }) => {
       if (!mounted) return;
       if (sessionError) setError(sessionError.message);
+      if (data.session?.provider_token && data.session.user.id) {
+        localStorage.setItem(googleProviderTokenKey(data.session.user.id), data.session.provider_token);
+      }
       setSession(data.session);
       setLoading(false);
     });
 
     const { data: listener } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+      if (nextSession?.provider_token && nextSession.user.id) {
+        localStorage.setItem(googleProviderTokenKey(nextSession.user.id), nextSession.provider_token);
+      }
       setSession(nextSession);
       setError(null);
       setLoading(false);

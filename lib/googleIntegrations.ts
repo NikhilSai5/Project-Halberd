@@ -5,6 +5,7 @@ export const GOOGLE_CALENDAR_SCOPE = "https://www.googleapis.com/auth/calendar";
 export const GOOGLE_TASKS_SCOPE = "https://www.googleapis.com/auth/tasks";
 
 const tokenKey = (userId: string) => `halberd.google.tokens.${userId}`;
+const providerTokenKey = (userId: string) => `halberd.google.provider-token.${userId}`;
 
 export interface GoogleTokens {
   accessToken: string;
@@ -78,20 +79,56 @@ function setConnection(userId: string, service: keyof GoogleConnectionState): vo
   }));
 }
 
+async function getExtensionGoogleToken(): Promise<string | null> {
+  const identity = browser.identity as typeof browser.identity & {
+    getAuthToken?: (details: { interactive: boolean }) => Promise<string | { token: string }>;
+  };
+  if (!identity.getAuthToken) return null;
+  const result = await identity.getAuthToken({ interactive: true });
+  return typeof result === "string" ? result : result.token || null;
+}
+
+export async function removeGoogleConnection(userId: string, service: keyof GoogleConnectionState): Promise<void> {
+  const next = { ...getGoogleConnection(userId), [service]: false };
+  localStorage.setItem(`halberd.google.connections.${userId}`, JSON.stringify(next));
+  if (next.calendar || next.tasks) return;
+
+  const tokens = getStoredTokens(userId);
+  localStorage.removeItem(tokenKey(userId));
+  localStorage.removeItem(providerTokenKey(userId));
+  if (tokens?.accessToken) {
+    await fetch(`https://oauth2.googleapis.com/revoke?token=${encodeURIComponent(tokens.accessToken)}`, { method: "POST" }).catch(() => {});
+  }
+}
+
 export async function connectGoogle(userId: string, service: keyof GoogleConnectionState): Promise<void> {
+  try {
+    const extensionToken = await getExtensionGoogleToken();
+    if (extensionToken) {
+      saveTokens(userId, extensionToken);
+      setConnection(userId, service);
+      return;
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "";
+    if (message.toLowerCase().includes("oauth") || message.toLowerCase().includes("client")) {
+      throw new Error("Configure VITE_GOOGLE_EXTENSION_CLIENT_ID with a Chrome Extension OAuth client ID, then rebuild the extension.");
+    }
+  }
   if (!supabase) throw new Error("Supabase is not configured.");
   const existing = getGoogleConnection(userId);
   const requestedScopes = new Set<string>([service === "calendar" ? GOOGLE_CALENDAR_SCOPE : GOOGLE_TASKS_SCOPE]);
   if (existing.calendar || service === "calendar") requestedScopes.add(GOOGLE_CALENDAR_SCOPE);
   if (existing.tasks || service === "tasks") requestedScopes.add(GOOGLE_TASKS_SCOPE);
+  const scope = [...requestedScopes].join(" ");
   const redirectTo = browser.identity.getRedirectURL("oauth2");
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider: "google",
     options: {
       redirectTo,
       skipBrowserRedirect: true,
-      scopes: [...requestedScopes].join(" "),
-      queryParams: { access_type: "offline", prompt: "consent" },
+      scopes: scope,
+      queryParams: { access_type: "offline", prompt: "consent", scope },
     },
   });
   if (error || !data.url) throw new Error(error?.message || "Unable to start Google authorization.");
@@ -99,15 +136,36 @@ export async function connectGoogle(userId: string, service: keyof GoogleConnect
   const parsed = new URL(callbackUrl);
   const hash = new URLSearchParams(parsed.hash.replace(/^#/, ""));
   const query = parsed.searchParams;
+  const code = query.get("code") || hash.get("code");
   const accessToken = hash.get("access_token") || query.get("access_token");
   const refreshToken = hash.get("refresh_token") || query.get("refresh_token");
   const providerToken = hash.get("provider_token") || query.get("provider_token");
   const providerRefreshToken = hash.get("provider_refresh_token") || query.get("provider_refresh_token");
-  if (!accessToken || !refreshToken) throw new Error("Google authorization did not return a valid session.");
-  if (!providerToken) throw new Error("Google did not grant API access. Please approve the requested permission and try again.");
-  const { data: sessionData, error: sessionError } = await supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken });
+  let sessionData: Awaited<ReturnType<typeof supabase.auth.getSession>>["data"];
+  let sessionError: Awaited<ReturnType<typeof supabase.auth.getSession>>["error"];
+  if (code) {
+    const exchanged = await supabase.auth.exchangeCodeForSession(code);
+    sessionData = exchanged.data;
+    sessionError = exchanged.error;
+  } else {
+    if (accessToken && refreshToken) {
+      const restored = await supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken });
+      sessionData = restored.data;
+      sessionError = restored.error;
+    } else {
+      const current = await supabase.auth.getSession();
+      sessionData = current.data;
+      sessionError = current.error;
+      if (!sessionData.session) throw new Error("Google authorization did not return a valid session. Please try reconnecting again.");
+    }
+  }
   if (sessionError || !sessionData.session) throw new Error(sessionError?.message || "Unable to establish the Google session.");
-  saveTokens(userId, providerToken, providerRefreshToken || undefined);
+  // Supabase can publish provider_token through onAuthStateChange immediately
+  // after the exchange resolves, so allow that notification to finish first.
+  await new Promise((resolve) => window.setTimeout(resolve, 0));
+  const googleAccessToken = providerToken || sessionData.session.provider_token || localStorage.getItem(providerTokenKey(userId));
+  if (!googleAccessToken) throw new Error("Google did not grant API access. Please approve the requested permission and try again.");
+  saveTokens(userId, googleAccessToken, providerRefreshToken || sessionData.session.provider_refresh_token || undefined);
   setConnection(userId, service);
 }
 
@@ -120,7 +178,14 @@ async function googleFetch<T>(userId: string, path: string, init?: RequestInit):
   });
   if (!response.ok) {
     if (response.status === 401) throw new Error("Google authorization expired. Reconnect this integration in Settings.");
-    throw new Error(`Google API error (${response.status}).`);
+    let detail = "";
+    try {
+      const body = await response.json() as { error?: { message?: string; errors?: { reason?: string }[] } };
+      detail = body.error?.message || body.error?.errors?.[0]?.reason || "";
+    } catch {
+      // Keep the status-only message when Google returns a non-JSON response.
+    }
+    throw new Error(`Google API error (${response.status})${detail ? `: ${detail}` : "."}`);
   }
   return response.status === 204 ? undefined as T : await response.json() as T;
 }

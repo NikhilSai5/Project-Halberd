@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect } from "react";
 import { useSettings, type TodoGroup, type TodoItem, type WallpaperFile } from '@/lib/SettingsContext';
 import { useAuth } from '@/lib/AuthContext';
-import { connectGoogle, getGoogleConnection, listGoogleTasks, updateGoogleTask, type GoogleTask } from '@/lib/googleIntegrations';
+import { connectGoogle, getGoogleConnection, listGoogleTasks, removeGoogleConnection, updateGoogleTask, type GoogleTask } from '@/lib/googleIntegrations';
 import { userStorageKey } from '@/lib/userStorage';
 import defaultWallpaperOne from '@/assets/default wallpapers/wallhaven-d6q21o.jpg';
 import defaultWallpaperTwo from '@/assets/default wallpapers/wallhaven-l87z7l.jpg';
@@ -144,6 +144,25 @@ export default function Settings() {
       setConnectionMessage(`${service === "calendar" ? "Google Calendar" : "Google Tasks"} connected.`);
     } catch (error) {
       setConnectionMessage(error instanceof Error ? error.message : "Unable to connect Google.");
+    } finally {
+      setConnectionBusy(null);
+    }
+  };
+
+  const removeService = async (service: "calendar" | "tasks") => {
+    if (!user) return;
+    setConnectionBusy(service);
+    setConnectionMessage(null);
+    try {
+      await removeGoogleConnection(user.id, service);
+      setConnections(getGoogleConnection(user.id));
+      if (service === "tasks") {
+        setGoogleTasks([]);
+        window.dispatchEvent(new Event("halberd-google-tasks-disconnected"));
+      }
+      setConnectionMessage(`${service === "calendar" ? "Google Calendar" : "Google Tasks"} disconnected.`);
+    } catch (error) {
+      setConnectionMessage(error instanceof Error ? error.message : "Unable to remove the Google connection.");
     } finally {
       setConnectionBusy(null);
     }
@@ -1327,9 +1346,12 @@ export default function Settings() {
                             <div className="font-body-main text-body-main text-on-surface font-medium">Google Calendar</div>
                             <div className="label-copy text-text-secondary">Sync your events and schedule</div>
                           </div>
-                          <button type="button" onClick={() => void connectService("calendar")} disabled={connectionBusy !== null} className="button-regular button-primary font-label-secondary text-label-secondary flex-shrink-0 disabled:opacity-50">
-                            {connectionBusy === "calendar" ? "Connecting..." : connections.calendar ? "Reconnect" : "Connect"}
-                          </button>
+                          <div className="flex items-center gap-2 flex-shrink-0">
+                            <button type="button" onClick={() => void connectService("calendar")} disabled={connectionBusy !== null} className="button-regular button-primary font-label-secondary text-label-secondary disabled:opacity-50">
+                              {connectionBusy === "calendar" ? "Connecting..." : connections.calendar ? "Reconnect" : "Connect"}
+                            </button>
+                            {connections.calendar && <button type="button" onClick={() => void removeService("calendar")} disabled={connectionBusy !== null} className="button-regular button-regular--outlined font-label-secondary text-label-secondary text-error border-error disabled:opacity-50">Remove</button>}
+                          </div>
                         </div>
                         <div className="flex items-center gap-4 p-4 rounded-xl bg-surface-container-low border border-border-subtle">
                           <div className="w-10 h-10 rounded-lg bg-surface-white border border-border-subtle flex items-center justify-center flex-shrink-0">
@@ -1339,9 +1361,12 @@ export default function Settings() {
                             <div className="font-body-main text-body-main text-on-surface font-medium">Google Tasks</div>
                             <div className="label-copy text-text-secondary">Manage your tasks and to-dos</div>
                           </div>
-                          <button type="button" onClick={() => void connectService("tasks")} disabled={connectionBusy !== null} className="button-regular button-primary font-label-secondary text-label-secondary flex-shrink-0 disabled:opacity-50">
-                            {connectionBusy === "tasks" ? "Connecting..." : connections.tasks ? "Reconnect" : "Connect"}
-                          </button>
+                          <div className="flex items-center gap-2 flex-shrink-0">
+                            <button type="button" onClick={() => void connectService("tasks")} disabled={connectionBusy !== null} className="button-regular button-primary font-label-secondary text-label-secondary disabled:opacity-50">
+                              {connectionBusy === "tasks" ? "Connecting..." : connections.tasks ? "Reconnect" : "Connect"}
+                            </button>
+                            {connections.tasks && <button type="button" onClick={() => void removeService("tasks")} disabled={connectionBusy !== null} className="button-regular button-regular--outlined font-label-secondary text-label-secondary text-error border-error disabled:opacity-50">Remove</button>}
+                          </div>
                         </div>
                         {connectionMessage && <p className="label-copy text-text-secondary" role="status">{connectionMessage}</p>}
                         {connections.tasks && googleTasks.length > 0 && (
