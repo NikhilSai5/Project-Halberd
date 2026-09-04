@@ -274,6 +274,28 @@ export default function FloatingCircle() {
     };
   }, []);
 
+  // Position as a fraction of the movable range, so the circle keeps the same
+  // relative spot across tabs even when window sizes differ.
+  const positionToFractions = useCallback((pos: Position) => {
+    const maxX = Math.max(0, window.innerWidth - CIRCLE_SIZE - MARGIN);
+    const maxY = Math.max(0, window.innerHeight - CIRCLE_SIZE - MARGIN);
+    const rangeX = maxX - MARGIN || 1;
+    const rangeY = maxY - MARGIN || 1;
+    return {
+      rx: Math.min(1, Math.max(0, (pos.x - MARGIN) / rangeX)),
+      ry: Math.min(1, Math.max(0, (pos.y - MARGIN) / rangeY)),
+    };
+  }, []);
+
+  const fractionsToPosition = useCallback((rx: number, ry: number): Position => {
+    const maxX = Math.max(0, window.innerWidth - CIRCLE_SIZE - MARGIN);
+    const maxY = Math.max(0, window.innerHeight - CIRCLE_SIZE - MARGIN);
+    return clampPosition(
+      MARGIN + rx * (maxX - MARGIN),
+      MARGIN + ry * (maxY - MARGIN)
+    );
+  }, [clampPosition]);
+
   // Load saved position from browser storage
   useEffect(() => {
     let isMounted = true;
@@ -282,10 +304,10 @@ export default function FloatingCircle() {
       try {
         if (browser?.storage?.local) {
           const result = await browser.storage.local.get(STORAGE_KEY);
-          const savedPos = result?.[STORAGE_KEY] as Position | undefined;
-          if (savedPos && typeof savedPos.x === "number" && typeof savedPos.y === "number") {
+          const savedPos = result?.[STORAGE_KEY] as { rx?: number; ry?: number } | undefined;
+          if (savedPos && typeof savedPos.rx === "number" && typeof savedPos.ry === "number") {
             if (isMounted) {
-              setPosition(clampPosition(savedPos.x, savedPos.y));
+              setPosition(fractionsToPosition(savedPos.rx, savedPos.ry));
             }
             return;
           }
@@ -310,9 +332,13 @@ export default function FloatingCircle() {
       areaName?: string
     ) => {
       if ((!areaName || areaName === "local") && changes[STORAGE_KEY]?.newValue) {
-        const newPos = changes[STORAGE_KEY].newValue as Position;
-        if (!isDraggingRef.current && typeof newPos.x === "number" && typeof newPos.y === "number") {
-          setPosition(clampPosition(newPos.x, newPos.y));
+        const newPos = changes[STORAGE_KEY].newValue as { rx?: number; ry?: number };
+        if (
+          !isDraggingRef.current &&
+          typeof newPos.rx === "number" &&
+          typeof newPos.ry === "number"
+        ) {
+          setPosition(fractionsToPosition(newPos.rx, newPos.ry));
         }
       }
     };
@@ -343,7 +369,7 @@ export default function FloatingCircle() {
         clearTimeout(confirmTimerRef.current);
       }
     };
-  }, [clampPosition]);
+  }, [clampPosition, fractionsToPosition]);
 
   // Current active habit (or the habit waiting for confirmation)
   const currentHabit = confirmingHabitId
@@ -479,7 +505,7 @@ export default function FloatingCircle() {
     try {
       if (browser?.storage?.local) {
         browser.storage.local
-          .set({ [STORAGE_KEY]: finalPos })
+          .set({ [STORAGE_KEY]: positionToFractions(finalPos) })
           .catch((err: any) => console.warn("[Halberd] Failed to save circle position:", err));
       }
     } catch {}
