@@ -113,8 +113,8 @@ export default function FloatingCircle() {
   const [position, setPosition] = useState<Position>(() => {
     if (typeof window !== "undefined") {
       return {
-        x: Math.max(MARGIN, window.innerWidth - CIRCLE_SIZE - MARGIN),
-        y: MARGIN,
+         x: Math.max(MARGIN, window.innerWidth - CIRCLE_SIZE - MARGIN),
+         y: MARGIN,
       };
     }
     return { x: 100, y: MARGIN };
@@ -297,8 +297,8 @@ export default function FloatingCircle() {
 
   // Clamp position to viewport bounds
   const clampPosition = useCallback((x: number, y: number): Position => {
-    const maxX = Math.max(0, window.innerWidth - CIRCLE_SIZE - MARGIN);
-    const maxY = Math.max(0, window.innerHeight - CIRCLE_SIZE - MARGIN);
+     const maxX = Math.max(0, window.innerWidth - CIRCLE_SIZE - MARGIN);
+     const maxY = Math.max(0, window.innerHeight - CIRCLE_SIZE - MARGIN);
     return {
       x: Math.min(Math.max(MARGIN, x), maxX),
       y: Math.min(Math.max(MARGIN, y), maxY),
@@ -327,7 +327,7 @@ export default function FloatingCircle() {
 
       if (isMounted) {
         setPosition({
-          x: Math.max(MARGIN, window.innerWidth - CIRCLE_SIZE - MARGIN),
+         x: Math.max(MARGIN, window.innerWidth - CIRCLE_SIZE - MARGIN),
           y: MARGIN,
         });
       }
@@ -539,13 +539,21 @@ export default function FloatingCircle() {
     ? `Click to complete "${currentHabit.name}"`
     : "Halberd";
 
+  const orbStatus = isConfirming
+    ? "Confirm"
+    : justCompletedHabit
+    ? "Logged"
+    : isAllDone
+    ? "All done"
+    : "Ready";
+
   // Position tooltip above or below circle based on screen clearance
-  const isNearTop = position.y < 60;
-  const isNearRight = typeof window !== "undefined" && position.x > window.innerWidth - 180;
+   const isNearTop = position.y < 60;
+   const isNearRight = typeof window !== "undefined" && position.x > window.innerWidth - 180;
 
   // Satellite geometry
-  const mainCX = position.x + CIRCLE_SIZE / 2;
-  const mainCY = position.y + CIRCLE_SIZE / 2;
+   const mainCX = position.x + CIRCLE_SIZE / 2;
+   const mainCY = position.y + CIRCLE_SIZE / 2;
   const satelliteOffsets = getSatellitePositions(
     allTodoGroups.length,
     mainCX,
@@ -560,6 +568,19 @@ export default function FloatingCircle() {
         @keyframes halberd-tooltip-pop {
           0% { transform: translateY(4px) scale(0.92); opacity: 0; }
           100% { transform: translateY(0) scale(1); opacity: 1; }
+        }
+        @keyframes halberd-glass-shimmer {
+          0%, 55% { transform: translateX(-150%) rotate(25deg); opacity: 0; }
+          68% { opacity: 0.55; }
+          86%, 100% { transform: translateX(170%) rotate(25deg); opacity: 0; }
+        }
+        @keyframes halberd-glass-breathe {
+          0%, 100% { transform: scale(0.94); opacity: 0.38; }
+          50% { transform: scale(1.08); opacity: 0.62; }
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .halberd-glass-shimmer,
+          .halberd-glass-aura { animation: none !important; }
         }
       `}</style>
 
@@ -606,11 +627,14 @@ export default function FloatingCircle() {
                 width: `${SATELLITE_SIZE}px`,
                 height: `${SATELLITE_SIZE}px`,
                 borderRadius: "50%",
-                backgroundColor: palette.bg,
-                border: `1.5px solid ${palette.border}`,
-                boxShadow: isHov
-                  ? `0 8px 20px -4px rgba(0,0,0,0.22), 0 0 0 2.5px ${palette.border}`
-                  : "0 4px 12px -2px rgba(0,0,0,0.14)",
+                 background: `linear-gradient(145deg, rgba(255,255,255,0.72), rgba(255,255,255,0.12)), ${palette.bg}`,
+                 backgroundColor: palette.bg,
+                 backdropFilter: "blur(10px) saturate(145%)",
+                 WebkitBackdropFilter: "blur(10px) saturate(145%)",
+                 border: "1.5px solid rgba(255, 255, 255, 0.7)",
+                 boxShadow: isHov
+                   ? `0 8px 20px -4px rgba(0,0,0,0.22), 0 0 0 2.5px ${palette.border}, inset 0 1px 1px rgba(255,255,255,0.8), inset 0 -6px 12px rgba(42,70,55,0.1)`
+                   : "0 4px 12px -2px rgba(0,0,0,0.14), inset 0 1px 1px rgba(255,255,255,0.82), inset 0 -5px 10px rgba(42,70,55,0.08)",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
@@ -687,20 +711,40 @@ export default function FloatingCircle() {
         position: "fixed",
         left: `${position.x}px`,
         top: `${position.y}px`,
-        width: `${CIRCLE_SIZE}px`,
-        height: `${CIRCLE_SIZE}px`,
+         width: `${CIRCLE_SIZE}px`,
+         height: `${CIRCLE_SIZE}px`,
         zIndex: 2147483647,
         userSelect: "none",
         WebkitUserSelect: "none",
-        touchAction: "none",
-      }}
-    >
-      {/* Visual Tooltip for Confirmation */}
+         touchAction: "none",
+       }}
+     >
+       {/* Ambient halo keeps the glass surface legible over busy pages. */}
+       <div
+         className="halberd-glass-aura"
+         style={{
+           position: "absolute",
+           inset: "-9px",
+           borderRadius: "50%",
+           pointerEvents: "none",
+           background: isConfirming
+             ? "radial-gradient(circle, rgba(74, 222, 128, 0.5), rgba(74, 222, 128, 0) 68%)"
+             : justCompletedHabit
+              ? "radial-gradient(circle, rgba(232, 166, 93, 0.46), rgba(232, 166, 93, 0) 68%)"
+             : "radial-gradient(circle, rgba(148, 199, 164, 0.48), rgba(148, 199, 164, 0) 68%)",
+           filter: "blur(7px)",
+           opacity: isHovered || isDragging ? 0.8 : 0.52,
+           animation: isHovered || isDragging ? "none" : "halberd-glass-breathe 4s ease-in-out infinite",
+           transition: "opacity 0.25s ease",
+         }}
+       />
+
+       {/* Visual Tooltip for Confirmation */}
       {isConfirming && (
         <div
           style={{
             position: "absolute",
-            [isNearTop ? "top" : "bottom"]: `${CIRCLE_SIZE + 10}px`,
+             [isNearTop ? "top" : "bottom"]: `${CIRCLE_SIZE + 10}px`,
             [isNearRight ? "right" : "left"]: isNearRight ? "0px" : "50%",
             transform: isNearRight ? "none" : "translateX(-50%)",
             backgroundColor: "rgba(15, 23, 42, 0.94)",
@@ -728,19 +772,30 @@ export default function FloatingCircle() {
       {/* Main Floating Circle */}
       <div
         style={{
-          width: `${CIRCLE_SIZE}px`,
-          height: `${CIRCLE_SIZE}px`,
-          borderRadius: "50%",
-          backgroundColor: "#ffffff",
-          boxShadow: isDragging
-            ? "0 20px 32px -4px rgba(0, 0, 0, 0.28), 0 10px 16px -4px rgba(0, 0, 0, 0.15), 0 0 0 2px rgba(99, 102, 241, 0.35)"
-            : isConfirming
-            ? "0 14px 28px -4px rgba(34, 197, 94, 0.4), 0 6px 12px -2px rgba(34, 197, 94, 0.25), 0 0 0 2.5px rgba(34, 197, 94, 0.6)"
-            : justCompletedHabit
-            ? "0 14px 28px -4px rgba(99, 102, 241, 0.4), 0 6px 12px -2px rgba(99, 102, 241, 0.2), 0 0 0 2px rgba(99, 102, 241, 0.5)"
-            : isHovered
-            ? "0 14px 28px -4px rgba(0, 0, 0, 0.2), 0 6px 12px -2px rgba(0, 0, 0, 0.12), 0 0 0 1px rgba(0, 0, 0, 0.08)"
-            : "0 10px 22px -3px rgba(0, 0, 0, 0.16), 0 4px 8px -2px rgba(0, 0, 0, 0.08), 0 0 0 1px rgba(0, 0, 0, 0.06)",
+           width: `${CIRCLE_SIZE}px`,
+           height: `${CIRCLE_SIZE}px`,
+           borderRadius: "50%",
+           position: "relative",
+           overflow: "hidden",
+           isolation: "isolate",
+           background: isConfirming
+             ? "linear-gradient(135deg, rgba(34, 82, 51, 0.96), rgba(8, 25, 15, 0.94))"
+             : justCompletedHabit
+             ? "linear-gradient(135deg, rgba(50, 83, 62, 0.96), rgba(13, 31, 21, 0.94))"
+             : "linear-gradient(135deg, rgba(28, 58, 39, 0.95), rgba(7, 21, 13, 0.94))",
+           backgroundColor: "rgba(10, 29, 18, 0.92)",
+           backdropFilter: "blur(18px) saturate(155%)",
+           WebkitBackdropFilter: "blur(18px) saturate(155%)",
+           border: "1px solid rgba(207, 239, 216, 0.28)",
+           boxShadow: isDragging
+             ? "0 20px 32px -4px rgba(0, 0, 0, 0.34), 0 10px 16px -4px rgba(0, 0, 0, 0.2), 0 0 0 2px rgba(151, 211, 165, 0.32), inset 0 1px 1px rgba(255,255,255,0.34), inset 0 -10px 18px rgba(0, 0, 0, 0.25)"
+             : isConfirming
+             ? "0 14px 28px -4px rgba(34, 197, 94, 0.34), 0 6px 12px -2px rgba(34, 197, 94, 0.2), 0 0 0 2px rgba(111, 231, 139, 0.58), inset 0 1px 1px rgba(255,255,255,0.38), inset 0 -10px 18px rgba(0, 0, 0, 0.24)"
+             : justCompletedHabit
+             ? "0 14px 28px -4px rgba(94, 170, 112, 0.38), 0 6px 12px -2px rgba(0, 0, 0, 0.2), 0 0 0 2px rgba(170, 225, 181, 0.5), inset 0 1px 1px rgba(255,255,255,0.38), inset 0 -10px 18px rgba(0, 0, 0, 0.24)"
+             : isHovered
+             ? "0 14px 28px -4px rgba(0, 0, 0, 0.34), 0 6px 12px -2px rgba(0, 0, 0, 0.2), 0 0 0 1px rgba(151, 211, 165, 0.5), inset 0 1px 1px rgba(255,255,255,0.42), inset 0 -10px 18px rgba(0, 0, 0, 0.24)"
+             : "0 10px 22px -3px rgba(0, 0, 0, 0.3), 0 4px 8px -2px rgba(0, 0, 0, 0.18), 0 0 0 1px rgba(151, 211, 165, 0.3), inset 0 1px 1px rgba(255,255,255,0.38), inset 0 -10px 18px rgba(0, 0, 0, 0.22)",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
@@ -775,16 +830,76 @@ export default function FloatingCircle() {
             setHoveredSatelliteId(null);
           }, 120);
         }}
-        title={nativeTitle}
-      >
-        <div
-          style={{
+          title={nativeTitle}
+       >
+         {/* Center lens borrows the Dynamic Island's dark inset sensor treatment. */}
+         <div
+           aria-hidden="true"
+           style={{
+             position: "absolute",
+             left: "8px",
+             top: "11px",
+             width: "38px",
+             height: "32px",
+             borderRadius: "999px",
+             background: "linear-gradient(145deg, rgba(255,255,255,0.12), rgba(0,0,0,0.24))",
+             border: "1px solid rgba(207, 239, 216, 0.14)",
+             boxShadow: "inset 0 1px 1px rgba(255,255,255,0.16), inset 0 -5px 10px rgba(0,0,0,0.24), 0 2px 5px rgba(0,0,0,0.16)",
+             pointerEvents: "none",
+             zIndex: 1,
+           }}
+         />
+         <div
+           aria-label={orbStatus}
+           style={{
+             position: "absolute",
+             top: "10px",
+             right: "10px",
+             width: "6px",
+             height: "6px",
+             borderRadius: "50%",
+             backgroundColor: isConfirming ? "#7ee49a" : justCompletedHabit ? "#b4e6bd" : "#94c7a4",
+             boxShadow: "0 0 0 2px rgba(148, 199, 164, 0.14), 0 0 9px rgba(148, 199, 164, 0.8)",
+             pointerEvents: "none",
+             zIndex: 3,
+           }}
+         />
+         {/* A soft diagonal reflection sells the frosted-glass surface. */}
+         <div
+           className="halberd-glass-shimmer"
+           style={{
+             position: "absolute",
+             top: "-45%",
+             left: "-30%",
+             width: "34%",
+             height: "190%",
+             background: "linear-gradient(90deg, transparent, rgba(255,255,255,0.58), transparent)",
+             filter: "blur(2px)",
+             pointerEvents: "none",
+             zIndex: 0,
+             animation: "halberd-glass-shimmer 6s ease-in-out infinite",
+           }}
+         />
+         <div
+           style={{
+             position: "absolute",
+             inset: "3px",
+             borderRadius: "50%",
+             border: "1px solid rgba(255, 255, 255, 0.42)",
+             pointerEvents: "none",
+             zIndex: 0,
+           }}
+         />
+         <div
+           style={{
             pointerEvents: "none",
             userSelect: "none",
             WebkitUserSelect: "none",
-            display: "inline-flex",
-            alignItems: "center",
-            justifyContent: "center",
+             display: "inline-flex",
+             alignItems: "center",
+             justifyContent: "center",
+             position: "relative",
+             zIndex: 1,
             filter: "drop-shadow(0 2px 4px rgba(0,0,0,0.12))",
             transform: isTransitioning
               ? "scale(0.7) rotate(-10deg)"
@@ -795,7 +910,7 @@ export default function FloatingCircle() {
             transition: "transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.2s ease",
           }}
         >
-          <AnimatedEmoji emoji={displayEmoji} size={30} />
+           <AnimatedEmoji emoji={displayEmoji} size={24} />
         </div>
       </div>
     </div>

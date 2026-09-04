@@ -48,6 +48,34 @@ const defaultEvents: CalendarEvent[] = [
   { id: "10", title: "Lunch Break", startHour: 12, startMinute: 0, endHour: 13, endMinute: 0, variant: "break", icon: "restaurant", dayOfWeek: 2, dayOfMonth: 26 },
 ]; 
 
+const CALENDAR_CACHE_KEY = "halberd.calendar.cache";
+
+function getCalendarCacheKey(userId: string, monthKey: string): string {
+  return `${CALENDAR_CACHE_KEY}.${userId}.${monthKey}`;
+}
+
+function readCalendarCache(userId: string, monthKey: string): CalendarEvent[] | null {
+  try {
+    const raw = localStorage.getItem(getCalendarCacheKey(userId, monthKey));
+    if (!raw) return null;
+    const cached = JSON.parse(raw) as { events?: CalendarEvent[] };
+    return Array.isArray(cached.events) ? cached.events : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeCalendarCache(userId: string, monthKey: string, events: CalendarEvent[]): void {
+  try {
+    localStorage.setItem(
+      getCalendarCacheKey(userId, monthKey),
+      JSON.stringify({ cachedAt: Date.now(), events }),
+    );
+  } catch {
+    // A full or unavailable cache should never block calendar sync.
+  }
+}
+
 function toCalendarEvent(event: GoogleEvent): CalendarEvent {
   const startValue = event.start.dateTime || `${event.start.date}T09:00:00`;
   const endValue = event.end.dateTime || `${event.end.date}T10:00:00`;
@@ -213,6 +241,7 @@ export default function Calendar() {
     try {
       const googleEvents = await listGoogleEvents(user.id, month);
       const syncedEvents = googleEvents.filter((event) => event.status !== "cancelled").map(toCalendarEvent);
+      writeCalendarCache(user.id, month.key, syncedEvents);
       setEvents((items) => [
         ...items.filter((item) => !item.google || !item.startDate?.startsWith(month.key)),
         ...syncedEvents,
@@ -232,8 +261,20 @@ export default function Calendar() {
       loadedMonthsRef.current.clear();
       syncingMonthsRef.current.clear();
       loadedUserRef.current = user?.id;
-      if (!user) setEvents(defaultEvents);
+      setEvents(defaultEvents);
     }
+
+    const month = getMonthRange(currentDate);
+    if (user?.id && getGoogleConnection(user.id).calendar) {
+      const cachedEvents = readCalendarCache(user.id, month.key);
+      if (cachedEvents) {
+        setEvents((items) => [
+          ...items.filter((item) => !item.google || !item.startDate?.startsWith(month.key)),
+          ...cachedEvents,
+        ]);
+      }
+    }
+
     void syncCalendar();
     if (!user?.id || !getGoogleConnection(user.id).calendar) return;
     const interval = window.setInterval(() => void syncCalendar(true), 5 * 60 * 1000);
