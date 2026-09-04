@@ -15,6 +15,7 @@ export interface GoogleTokens {
 
 export interface GoogleEvent {
   id: string;
+  htmlLink?: string;
   summary?: string;
   description?: string;
   location?: string;
@@ -202,7 +203,21 @@ async function listAll<T>(userId: string, path: string, maxResults = 2500): Prom
   return values;
 }
 
-export const listGoogleEvents = (userId: string) => listAll<GoogleEvent>(userId, "/calendar/v3/calendars/primary/events?singleEvents=true&orderBy=startTime&showDeleted=false&timeMin=2000-01-01T00:00:00Z");
+export const listGoogleEvents = (
+  userId: string,
+  range?: { timeMin: string; timeMax: string },
+) => {
+  const params = new URLSearchParams({
+    singleEvents: "true",
+    orderBy: "startTime",
+    showDeleted: "false",
+  });
+  if (range) {
+    params.set("timeMin", range.timeMin);
+    params.set("timeMax", range.timeMax);
+  }
+  return listAll<GoogleEvent>(userId, `/calendar/v3/calendars/primary/events?${params.toString()}`);
+};
 export const createGoogleEvent = (userId: string, event: Omit<GoogleEvent, "id">) => googleFetch<GoogleEvent>(userId, "/calendar/v3/calendars/primary/events", { method: "POST", body: JSON.stringify(event) });
 export const updateGoogleEvent = (userId: string, id: string, event: Partial<GoogleEvent>) => googleFetch<GoogleEvent>(userId, `/calendar/v3/calendars/primary/events/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify(event) });
 export const deleteGoogleEvent = (userId: string, id: string) => googleFetch<void>(userId, `/calendar/v3/calendars/primary/events/${encodeURIComponent(id)}`, { method: "DELETE" });

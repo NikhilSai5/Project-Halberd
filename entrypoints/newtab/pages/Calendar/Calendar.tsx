@@ -21,9 +21,19 @@ interface CalendarEvent {
   dayOfMonth?: number;
   startDate?: string;
   google?: boolean;
+  googleUrl?: string;
 }
 
 type EventVariant = "standard" | "review" | "break" | "deepWork";
+
+interface EventForm {
+  title: string;
+  date: string;
+  startTime: string;
+  endTime: string;
+  description: string;
+  location: string;
+}
 
 const defaultEvents: CalendarEvent[] = [
   { id: "1", title: "Team Standup", startHour: 9, startMinute: 0, endHour: 9, endMinute: 30, variant: "standard", dayOfWeek: 1, dayOfMonth: 25 },
@@ -43,7 +53,7 @@ function toCalendarEvent(event: GoogleEvent): CalendarEvent {
   const endValue = event.end.dateTime || `${event.end.date}T10:00:00`;
   const start = new Date(startValue);
   const end = new Date(endValue);
-  return { id: event.id, title: event.summary || "Untitled event", startHour: start.getHours(), startMinute: start.getMinutes(), endHour: end.getHours(), endMinute: end.getMinutes(), variant: "standard", startDate: start.toISOString().slice(0, 10), google: true };
+  return { id: event.id, title: event.summary || "Untitled event", startHour: start.getHours(), startMinute: start.getMinutes(), endHour: end.getHours(), endMinute: end.getMinutes(), variant: "standard", startDate: getDateInputValue(start), google: true, googleUrl: event.htmlLink };
 }
 
 const eventStyles: Record<EventVariant, { containerClass: string; titleClass: string; centered: boolean; showTime: boolean }> = {
@@ -129,6 +139,52 @@ const getWeekStart = (date: Date) => {
 const isSameDay = (a: Date, b: Date) =>
   a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
 
+const getDateInputValue = (date: Date) => {
+  const year = date.getFullYear();
+  const month = (date.getMonth() + 1).toString().padStart(2, "0");
+  const day = date.getDate().toString().padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
+
+const getInitialEventForm = (date: Date): EventForm => ({
+  title: "",
+  date: getDateInputValue(date),
+  startTime: "09:00",
+  endTime: "10:00",
+  description: "",
+  location: "",
+});
+
+const getMonthRange = (date: Date) => {
+  const start = new Date(date.getFullYear(), date.getMonth(), 1);
+  const end = new Date(date.getFullYear(), date.getMonth() + 1, 1);
+  return {
+    key: getDateInputValue(start).slice(0, 7),
+    timeMin: start.toISOString(),
+    timeMax: end.toISOString(),
+  };
+};
+
+function GoogleEventButton({ event }: { event: CalendarEvent }) {
+  if (!event.google) return null;
+
+  const googleUrl = event.googleUrl || `https://calendar.google.com/calendar/u/0/r/eventedit/${encodeURIComponent(event.id)}`;
+  return (
+    <button
+      type="button"
+      className="calendar-event-expand"
+      aria-label={`Open ${event.title} in Google Calendar`}
+      title="Open in Google Calendar"
+      onClick={(e) => {
+        e.stopPropagation();
+        window.open(googleUrl, "_blank", "noopener,noreferrer");
+      }}
+    >
+      <span className="material-symbols-outlined" aria-hidden="true">open_in_new</span>
+    </button>
+  );
+}
+
 export default function Calendar() {
   const { user } = useAuth();
   const [events, setEvents] = useState<CalendarEvent[]>(defaultEvents);
@@ -137,29 +193,52 @@ export default function Calendar() {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [currentTime, setCurrentTime] = useState({ hour: 13, minute: 20 });
   const [view, setView] = useState<ViewMode>("day");
+  const [eventDialogOpen, setEventDialogOpen] = useState(false);
+  const [eventForm, setEventForm] = useState<EventForm>(() => getInitialEventForm(new Date()));
+  const [eventFormError, setEventFormError] = useState<string | null>(null);
+  const [creatingEvent, setCreatingEvent] = useState(false);
   const calendarBodyRef = useRef<HTMLDivElement>(null);
+  const loadedMonthsRef = useRef(new Set<string>());
+  const syncingMonthsRef = useRef(new Set<string>());
+  const loadedUserRef = useRef<string | undefined>(undefined);
 
-  const syncCalendar = async () => {
+  const syncCalendar = async (force = false) => {
     if (!user || !getGoogleConnection(user.id).calendar) return;
+    const month = getMonthRange(currentDate);
+    if (!force && loadedMonthsRef.current.has(month.key)) return;
+    if (syncingMonthsRef.current.has(month.key)) return;
+    syncingMonthsRef.current.add(month.key);
     setSyncing(true);
     setMessage(null);
     try {
-      const googleEvents = await listGoogleEvents(user.id);
-      setEvents(googleEvents.filter((event) => event.status !== "cancelled").map(toCalendarEvent));
-      setMessage(`${googleEvents.length} Google Calendar events synced.`);
+      const googleEvents = await listGoogleEvents(user.id, month);
+      const syncedEvents = googleEvents.filter((event) => event.status !== "cancelled").map(toCalendarEvent);
+      setEvents((items) => [
+        ...items.filter((item) => !item.google || !item.startDate?.startsWith(month.key)),
+        ...syncedEvents,
+      ]);
+      loadedMonthsRef.current.add(month.key);
+      setMessage(`${googleEvents.length} Google Calendar events synced for this month.`);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Unable to sync Google Calendar.");
     } finally {
-      setSyncing(false);
+      syncingMonthsRef.current.delete(month.key);
+      setSyncing(syncingMonthsRef.current.size > 0);
     }
   };
 
   useEffect(() => {
+    if (loadedUserRef.current !== user?.id) {
+      loadedMonthsRef.current.clear();
+      syncingMonthsRef.current.clear();
+      loadedUserRef.current = user?.id;
+      if (!user) setEvents(defaultEvents);
+    }
     void syncCalendar();
     if (!user?.id || !getGoogleConnection(user.id).calendar) return;
-    const interval = window.setInterval(() => void syncCalendar(), 5 * 60 * 1000);
+    const interval = window.setInterval(() => void syncCalendar(true), 5 * 60 * 1000);
     return () => window.clearInterval(interval);
-  }, [user?.id]);
+  }, [user?.id, currentDate.getFullYear(), currentDate.getMonth()]);
 
   const editEvent = async (event: CalendarEvent) => {
     if (!event.google || !user) return;
@@ -179,18 +258,66 @@ export default function Calendar() {
     } catch (error) { setMessage(error instanceof Error ? error.message : "Unable to delete event."); }
   };
 
-  const addEvent = async () => {
+  const openEventDialog = () => {
+    setEventForm(getInitialEventForm(currentDate));
+    setEventFormError(null);
+    setEventDialogOpen(true);
+  };
+
+  const closeEventDialog = () => {
+    if (creatingEvent) return;
+    setEventDialogOpen(false);
+    setEventFormError(null);
+  };
+
+  useEffect(() => {
+    if (!eventDialogOpen) return;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") closeEventDialog();
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [eventDialogOpen, creatingEvent]);
+
+  const addEvent = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
     if (!user || !getGoogleConnection(user.id).calendar) return;
-    const title = window.prompt("New event title");
-    if (!title) return;
-    const start = new Date(currentDate);
-    start.setHours(9, 0, 0, 0);
-    const end = new Date(start);
-    end.setHours(10);
+
+    const title = eventForm.title.trim();
+    const start = new Date(`${eventForm.date}T${eventForm.startTime}`);
+    const end = new Date(`${eventForm.date}T${eventForm.endTime}`);
+    if (!title || !eventForm.date || !eventForm.startTime || !eventForm.endTime) {
+      setEventFormError("Add a title, date, start time, and end time.");
+      return;
+    }
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+      setEventFormError("Enter a valid date and time.");
+      return;
+    }
+    if (end <= start) {
+      setEventFormError("The end time must be later than the start time.");
+      return;
+    }
+
+    setCreatingEvent(true);
+    setEventFormError(null);
     try {
-      const created = await createGoogleEvent(user.id, { summary: title, start: { dateTime: start.toISOString() }, end: { dateTime: end.toISOString() } });
+      const newEvent: Omit<GoogleEvent, "id"> = {
+        summary: title,
+        start: { dateTime: start.toISOString() },
+        end: { dateTime: end.toISOString() },
+        ...(eventForm.description.trim() ? { description: eventForm.description.trim() } : {}),
+        ...(eventForm.location.trim() ? { location: eventForm.location.trim() } : {}),
+      };
+      const created = await createGoogleEvent(user.id, newEvent);
       setEvents((items) => [...items, toCalendarEvent(created)]);
-    } catch (error) { setMessage(error instanceof Error ? error.message : "Unable to create event."); }
+      setEventDialogOpen(false);
+      setMessage("Event added to Google Calendar.");
+    } catch (error) {
+      setEventFormError(error instanceof Error ? error.message : "Unable to create event.");
+    } finally {
+      setCreatingEvent(false);
+    }
   };
 
   useEffect(() => {
@@ -275,7 +402,7 @@ export default function Calendar() {
   const getEventsForDate = (date: Date) => {
     const dow = date.getDay();
     const dom = date.getDate();
-    return events.filter((e) => e.startDate ? e.startDate === date.toISOString().slice(0, 10) : e.dayOfWeek === dow && e.dayOfMonth === dom);
+    return events.filter((e) => e.startDate ? e.startDate === getDateInputValue(date) : e.dayOfWeek === dow && e.dayOfMonth === dom);
   };
 
   const navLabel = view === "day" ? "Previous day" : view === "week" ? "Previous week" : "Previous month";
@@ -295,8 +422,8 @@ export default function Calendar() {
             </div>
           </div>
           <div className="calendar-actions">
-            {getGoogleConnection(user?.id).calendar && <button type="button" onClick={() => void syncCalendar()} disabled={syncing} className="button-compact calendar-secondary-action bg-surface-container-low text-text-primary font-label-secondary text-label-secondary disabled:opacity-50">{syncing ? "Syncing..." : "Sync"}</button>}
-            {getGoogleConnection(user?.id).calendar && <button type="button" onClick={() => void addEvent()} className="button-compact button-primary font-label-secondary text-label-secondary">+ Event</button>}
+            {getGoogleConnection(user?.id).calendar && <button type="button" onClick={() => void syncCalendar(true)} disabled={syncing} className="button-compact calendar-secondary-action bg-surface-container-low text-text-primary font-label-secondary text-label-secondary disabled:opacity-50">{syncing ? "Syncing..." : "Sync"}</button>}
+            {getGoogleConnection(user?.id).calendar && <button type="button" onClick={openEventDialog} className="button-compact button-primary font-label-secondary text-label-secondary">+ Event</button>}
             <div className="calendar-view-switcher">
               {(["day", "week", "month"] as ViewMode[]).map((v) => (
                 <button
@@ -351,16 +478,17 @@ export default function Calendar() {
                         onContextMenu={(e) => { e.preventDefault(); void removeEvent(event); }}
                         title={event.google ? "Click to edit, right-click to delete" : undefined}
                       >
+                        <GoogleEventButton event={event} />
                         {event.icon ? (
                           <div className={`${eventStyle.titleClass} flex items-center gap-2`}>
                             <span className="material-symbols-outlined icon-inline" aria-hidden="true" data-icon={event.icon}>{event.icon}</span>
-                            {event.title}
+                               {event.title}
                           </div>
                         ) : (
                           <>
-                            <div className={`${eventStyle.titleClass} truncate`}>
-                              {event.title}
-                            </div>
+                             <div className={`${eventStyle.titleClass} truncate`}>
+                               {event.title}
+                             </div>
                             {eventStyle.showTime && (
                               <div className="calendar-event-meta font-caption-metadata text-caption-metadata mt-1">
                                 {formatTime(event.startHour, event.startMinute)} - {formatTime(event.endHour, event.endMinute)}
@@ -461,9 +589,10 @@ export default function Calendar() {
                                   height: getHeight(event.startHour, event.startMinute, event.endHour, event.endMinute),
                                  }}
                                  onClick={() => void editEvent(event)}
-                                 onContextMenu={(e) => { e.preventDefault(); void removeEvent(event); }}
-                               >
-                                {event.icon ? (
+                                  onContextMenu={(e) => { e.preventDefault(); void removeEvent(event); }}
+                                >
+                                 <GoogleEventButton event={event} />
+                                 {event.icon ? (
                                   <div className={`${eventStyle.titleClass} flex items-center gap-1`}>
                                     <span className="material-symbols-outlined icon-inline text-[14px]" aria-hidden="true">{event.icon}</span>
                                     {event.title}
@@ -519,14 +648,15 @@ export default function Calendar() {
                             event.variant === "review" ? "#6c91ad" :
                             event.variant === "deepWork" ? "#9b7bb7" : "#a0a0a0";
                           return (
-                            <div
-                              key={event.id}
-                              className="calendar-month-event truncate rounded px-1 py-0.5"
-                               style={{ backgroundColor: `${variantColor}20`, color: variantColor, fontSize: "10px", lineHeight: "14px", fontWeight: 500 }}
-                               onClick={() => void editEvent(event)}
-                             >
-                              {event.title}
-                            </div>
+                             <div
+                               key={event.id}
+                               className="calendar-month-event truncate rounded px-1 py-0.5"
+                                style={{ backgroundColor: `${variantColor}20`, color: variantColor, fontSize: "10px", lineHeight: "14px", fontWeight: 500 }}
+                                onClick={() => void editEvent(event)}
+                              >
+                               <span className="calendar-month-event-title">{event.title}</span>
+                               <GoogleEventButton event={event} />
+                             </div>
                           );
                         })}
                         {cellEvents.length > 3 && (
@@ -540,9 +670,104 @@ export default function Calendar() {
                 })}
               </div>
             </div>
-          )}
+         )}
         </div>
       </main>
+      {eventDialogOpen && (
+        <div
+          className="calendar-dialog-backdrop"
+          role="presentation"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) closeEventDialog();
+          }}
+        >
+          <form
+            className="calendar-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="calendar-dialog-title"
+            onSubmit={(event) => void addEvent(event)}
+            onMouseDown={(event) => event.stopPropagation()}
+          >
+            <div className="calendar-dialog-header">
+              <div>
+                <p className="calendar-dialog-kicker">Google Calendar</p>
+                <h2 id="calendar-dialog-title">Create event</h2>
+              </div>
+              <button type="button" className="calendar-dialog-close" onClick={closeEventDialog} aria-label="Close event dialog" disabled={creatingEvent}>
+                <span className="material-symbols-outlined" aria-hidden="true">close</span>
+              </button>
+            </div>
+
+            <div className="calendar-dialog-fields">
+              <label className="calendar-dialog-field calendar-dialog-field--wide">
+                <span>Event title <b>*</b></span>
+                <input
+                  type="text"
+                  value={eventForm.title}
+                  onChange={(event) => setEventForm((form) => ({ ...form, title: event.target.value }))}
+                  placeholder="e.g. Product review"
+                  autoFocus
+                  required
+                />
+              </label>
+              <label className="calendar-dialog-field calendar-dialog-field--wide">
+                <span>Date <b>*</b></span>
+                <input
+                  type="date"
+                  value={eventForm.date}
+                  onChange={(event) => setEventForm((form) => ({ ...form, date: event.target.value }))}
+                  required
+                />
+              </label>
+              <label className="calendar-dialog-field">
+                <span>Start time <b>*</b></span>
+                <input
+                  type="time"
+                  value={eventForm.startTime}
+                  onChange={(event) => setEventForm((form) => ({ ...form, startTime: event.target.value }))}
+                  required
+                />
+              </label>
+              <label className="calendar-dialog-field">
+                <span>End time <b>*</b></span>
+                <input
+                  type="time"
+                  value={eventForm.endTime}
+                  onChange={(event) => setEventForm((form) => ({ ...form, endTime: event.target.value }))}
+                  required
+                />
+              </label>
+              <label className="calendar-dialog-field calendar-dialog-field--wide">
+                <span>Location <em>optional</em></span>
+                <input
+                  type="text"
+                  value={eventForm.location}
+                  onChange={(event) => setEventForm((form) => ({ ...form, location: event.target.value }))}
+                  placeholder="Add a room or meeting link"
+                />
+              </label>
+              <label className="calendar-dialog-field calendar-dialog-field--wide">
+                <span>Description <em>optional</em></span>
+                <textarea
+                  value={eventForm.description}
+                  onChange={(event) => setEventForm((form) => ({ ...form, description: event.target.value }))}
+                  placeholder="Add notes for attendees"
+                  rows={3}
+                />
+              </label>
+            </div>
+
+            {eventFormError && <p className="calendar-dialog-error" role="alert">{eventFormError}</p>}
+            <div className="calendar-dialog-actions">
+              <button type="button" className="button-compact calendar-secondary-action bg-surface-container-low text-text-primary" onClick={closeEventDialog} disabled={creatingEvent}>Cancel</button>
+              <button type="submit" className="button-compact button-primary" disabled={creatingEvent}>
+                {creatingEvent ? "Adding..." : "Add event"}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
     </div>
   );
 }
