@@ -3,6 +3,22 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useAuth } from "@/lib/AuthContext";
 import { userStorageKey } from "@/lib/userStorage";
+import {
+  type PomodoroState,
+  INACTIVE_POMODORO,
+  getTimeLeft,
+  getTotalTime,
+  isSessionComplete,
+  advanceSession,
+  startSession,
+  pauseSession,
+  stopSession,
+  resetSession,
+  setWorkTime as engineSetWorkTime,
+  setRestTime as engineSetRestTime,
+  loadPomodoro,
+  savePomodoro,
+} from "@/lib/pomodoro";
 
 const CIRCUMFERENCE = 2 * Math.PI * 15.9155;
 const DEFAULT_WORK_TIME = 25 * 60;
@@ -19,23 +35,39 @@ interface Session {
 
 export default function Pomodoro() {
   const { user } = useAuth();
-  const [workTime, setWorkTime] = useState(DEFAULT_WORK_TIME);
-  const [restTime, setRestTime] = useState(DEFAULT_REST_TIME);
 
-  const [timeLeft, setTimeLeft] = useState(workTime);
-  const [isRunning, setIsRunning] = useState(false);
-  const [isWorkSession, setIsWorkSession] = useState(true);
+  const [state, setState] = useState<PomodoroState>(INACTIVE_POMODORO);
+  const [now, setNow] = useState<number>(Date.now());
   const [sessionsCompleted, setSessionsCompleted] = useState(0);
   const [showTimeEdit, setShowTimeEdit] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
-
   const [history, setHistory] = useState<Session[]>([]);
 
-  const intervalRef = useRef<number | null>(null);
   const circleRef = useRef<SVGPathElement>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const editPopupRef = useRef<HTMLDivElement>(null);
+  const stateRef = useRef<PomodoroState>(state);
+  stateRef.current = state;
 
+  const workTime = state.workTime;
+  const restTime = state.restTime;
+  const isRunning = state.running;
+  const isWorkSession = state.mode === "focus";
+  const timeLeft = getTimeLeft(state, now);
+  const currentTotalTime = getTotalTime(state);
+
+  // Hydrate global pomodoro state (restores an in-progress session across tabs/pages)
+  useEffect(() => {
+    let cancelled = false;
+    loadPomodoro().then((loaded) => {
+      if (!cancelled) setState(loaded);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Load per-user duration + history settings (for the edit popup / history view)
   useEffect(() => {
     if (!user) return;
     const storedWork = localStorage.getItem(userStorageKey(user.id, "pomodoro_work_time"));
@@ -43,16 +75,21 @@ export default function Pomodoro() {
     const storedHistory = localStorage.getItem(userStorageKey(user.id, "pomodoro_history"));
     const nextWork = storedWork ? parseInt(storedWork, 10) : DEFAULT_WORK_TIME;
     const nextRest = storedRest ? parseInt(storedRest, 10) : DEFAULT_REST_TIME;
-    setWorkTime(nextWork); setRestTime(nextRest); setTimeLeft(nextWork);
+    setState((prev) => ({
+      ...prev,
+      workTime: nextWork,
+      restTime: nextRest,
+      ...(prev.active || prev.running
+        ? {}
+        : { mode: "focus" as const, sessionEndsAt: 0, pausedTimeLeft: nextWork }),
+    }));
     if (storedHistory) {
       try { setHistory(JSON.parse(storedHistory)); } catch { setHistory([]); }
     } else setHistory([]);
   }, [user?.id]);
 
-  const currentTotalTime = isWorkSession ? workTime : restTime;
-
   // --------------------------------------------------
-  // Persist work time
+  // Persist per-user duration settings + history
   // --------------------------------------------------
 
   useEffect(() => {
@@ -61,23 +98,11 @@ export default function Pomodoro() {
       userStorageKey(user.id, "pomodoro_work_time"),
       workTime.toString()
     );
-  }, [workTime, user?.id]);
-
-  // --------------------------------------------------
-  // Persist rest time
-  // --------------------------------------------------
-
-  useEffect(() => {
-    if (!user) return;
     localStorage.setItem(
       userStorageKey(user.id, "pomodoro_rest_time"),
       restTime.toString()
     );
-  }, [restTime, user?.id]);
-
-  // --------------------------------------------------
-  // Persist history
-  // --------------------------------------------------
+  }, [workTime, restTime, user?.id]);
 
   useEffect(() => {
     if (!user) return;
@@ -88,93 +113,62 @@ export default function Pomodoro() {
   }, [history, user?.id]);
 
   // --------------------------------------------------
-  // Session completion
-  // IMPORTANT: This is declared BEFORE the timer effect
+  // Persist global pomodoro state (drives the floating circle
+  // in every tab & page while a session is active)
+  // --------------------------------------------------
+
+  useEffect(() => {
+    savePomodoro(state);
+  }, [state]);
+
+  // --------------------------------------------------
+  // Tick: re-render while running and auto-advance modes.
+  // The countdown is timestamp based (see lib/pomodoro) so
+  // it stays accurate even when this page is in the background.
   // --------------------------------------------------
 
   const handleSessionComplete = useCallback(() => {
-    const now = new Date();
+    const current = stateRef.current;
+    const completedMode = current.mode;
+    const finishedAt = new Date();
 
-    // Save completed session
     setHistory((prev) => {
       const session: Session = {
         id: `${Date.now()}`,
-        date: now.toLocaleDateString(),
-        workDuration: isWorkSession ? workTime : 0,
-        restDuration: !isWorkSession ? restTime : 0,
-        completedAt: now.toLocaleTimeString([], {
+        date: finishedAt.toLocaleDateString(),
+        workDuration: completedMode === "focus" ? current.workTime : 0,
+        restDuration: completedMode === "rest" ? current.restTime : 0,
+        completedAt: finishedAt.toLocaleTimeString([], {
           hour: "2-digit",
           minute: "2-digit",
         }),
-        type: isWorkSession ? "work" : "rest",
+        type: completedMode === "focus" ? "work" as const : "rest" as const,
       };
 
       return [session, ...prev].slice(0, 50);
     });
 
-    if (isWorkSession) {
-      // ---------------------------------------------
-      // Focus session finished
-      // ---------------------------------------------
-
+    if (completedMode === "focus") {
       setSessionsCompleted((prev) => prev + 1);
-
-      // Switch to break
-      setIsWorkSession(false);
-
-      // Set break timer
-      setTimeLeft(restTime);
-
-      // Automatically start break
-      setIsRunning(true);
-    } else {
-      // ---------------------------------------------
-      // Break session finished
-      // ---------------------------------------------
-
-      // Switch back to focus
-      setIsWorkSession(true);
-
-      // Set focus timer
-      setTimeLeft(workTime);
-
-      // Automatically start focus
-      setIsRunning(true);
     }
-  }, [isWorkSession, workTime, restTime]);
 
-  // --------------------------------------------------
-  // Timer
-  // --------------------------------------------------
+    setState((prev) => advanceSession(prev));
+    setNow(Date.now());
+  }, []);
 
   useEffect(() => {
-    if (!isRunning) {
-      return;
-    }
+    if (!isRunning) return;
 
-    intervalRef.current = window.setInterval(() => {
-      setTimeLeft((prev) => {
-        if (prev <= 1) {
-          if (intervalRef.current !== null) {
-            clearInterval(intervalRef.current);
-            intervalRef.current = null;
-          }
-
-          handleSessionComplete();
-
-          return 0;
-        }
-
-        return prev - 1;
-      });
-    }, 1000);
-
-    return () => {
-      if (intervalRef.current !== null) {
-        clearInterval(intervalRef.current);
-        intervalRef.current = null;
+    const id = window.setInterval(() => {
+      const current = stateRef.current;
+      if (isSessionComplete(current)) {
+        handleSessionComplete();
+      } else {
+        setNow(Date.now());
       }
-    };
+    }, 250);
+
+    return () => window.clearInterval(id);
   }, [isRunning, handleSessionComplete]);
 
   // --------------------------------------------------
@@ -258,42 +252,34 @@ export default function Pomodoro() {
   // --------------------------------------------------
 
   const handleStartPause = useCallback(() => {
-    if (timeLeft === 0) {
-      setTimeLeft(currentTotalTime);
-    }
+    const current = stateRef.current;
+    const nowRef = Date.now();
 
-    setIsRunning((prev) => !prev);
-  }, [timeLeft, currentTotalTime]);
+    if (current.running) {
+      setState(pauseSession(current, nowRef));
+    } else {
+      setState(startSession(current));
+    }
+    setNow(Date.now());
+  }, []);
 
   // --------------------------------------------------
   // Reset
   // --------------------------------------------------
 
   const handleReset = useCallback(() => {
-    if (intervalRef.current !== null) {
-      clearInterval(intervalRef.current);
-      intervalRef.current = null;
-    }
-
-    setIsRunning(false);
-    setIsWorkSession(true);
-    setTimeLeft(workTime);
-  }, [workTime]);
+    setState(resetSession(stateRef.current));
+    setNow(Date.now());
+  }, []);
 
   // --------------------------------------------------
   // Stop
   // --------------------------------------------------
 
   const handleStop = useCallback(() => {
-    if (intervalRef.current !== null) {
-      clearInterval(intervalRef.current);
-      intervalRef.current = null;
-    }
-
-    setIsRunning(false);
-    setIsWorkSession(true);
-    setTimeLeft(workTime);
-  }, [workTime]);
+    setState(stopSession(stateRef.current));
+    setNow(Date.now());
+  }, []);
 
   // --------------------------------------------------
   // Change work duration
@@ -302,11 +288,13 @@ export default function Pomodoro() {
   const handleWorkTimeChange = (minutes: number) => {
     const seconds = Math.max(1, minutes) * 60;
 
-    setWorkTime(seconds);
-
-    if (!isRunning && isWorkSession) {
-      setTimeLeft(seconds);
-    }
+    setState((prev) => {
+      const next = engineSetWorkTime(prev, seconds);
+      if (!prev.running && prev.mode === "focus" && !prev.active) {
+        next.pausedTimeLeft = seconds;
+      }
+      return next;
+    });
   };
 
   // --------------------------------------------------
@@ -316,11 +304,13 @@ export default function Pomodoro() {
   const handleRestTimeChange = (minutes: number) => {
     const seconds = Math.max(1, minutes) * 60;
 
-    setRestTime(seconds);
-
-    if (!isRunning && !isWorkSession) {
-      setTimeLeft(seconds);
-    }
+    setState((prev) => {
+      const next = engineSetRestTime(prev, seconds);
+      if (!prev.running && prev.mode === "rest" && !prev.active) {
+        next.pausedTimeLeft = seconds;
+      }
+      return next;
+    });
   };
 
   // --------------------------------------------------

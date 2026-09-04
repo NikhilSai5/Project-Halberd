@@ -1,58 +1,29 @@
 "use client";
 
 import React, { useState, useEffect, useRef, useCallback, useContext } from "react";
-import { SettingsContext, type Habit, type TodoGroup } from "@/lib/SettingsContext";
+import { SettingsContext, type Habit } from "@/lib/SettingsContext";
 import AnimatedEmoji from "@/components/AnimatedEmoji";
 import { browser } from "wxt/browser";
+import {
+  type PomodoroState,
+  INACTIVE_POMODORO,
+  getTimeLeft,
+  getProgress,
+  loadPomodoro,
+  onPomodoroChange,
+} from "@/lib/pomodoro";
 
 const STORAGE_KEY = "halberd_floating_circle_pos";
 const HABITS_STORAGE_KEY = "halberd_habits";
-const TODO_GROUPS_STORAGE_KEY = "halberd_todo_groups";
-const CIRCLE_SIZE = 54;
-const SATELLITE_SIZE = 36;
-const SATELLITE_RADIUS = 72; // distance from center to satellite circle center
+const CIRCLE_SIZE = 44;
+const MIN_EXPANDED_CIRCLE_WIDTH = 108;
+const MAX_EXPANDED_CIRCLE_WIDTH = 300;
+const EXPANDED_HORIZONTAL_PADDING = 12;
+const ICON_TEXT_GAP = 8;
+const POMODORO_COLLAPSED_WIDTH = 92;
 const SLIDESHOW_INTERVAL = 6000; // 6 seconds per habit emoji, synced across all tabs
 const CONFIRM_TIMEOUT_MS = 5000; // 5 seconds to confirm before resetting
 const MARGIN = 16;
-
-// Soft palette cycling for satellite circles, matches project green/light theme
-const SATELLITE_COLORS = [
-  { bg: "#b9d9c0", text: "#43604c", border: "#94c7a4" },
-  { bg: "#c5d8f0", text: "#3a5a80", border: "#9bbfe0" },
-  { bg: "#f0d9c5", text: "#7a4a20", border: "#d0a07a" },
-  { bg: "#e8d0f0", text: "#6a3080", border: "#c09ad0" },
-  { bg: "#f0e8c5", text: "#7a6020", border: "#d0b87a" },
-  { bg: "#d0f0e8", text: "#207a5a", border: "#7ad0b8" },
-];
-
-// Compute satellite positions spread toward screen center
-function getSatellitePositions(
-  count: number,
-  centerX: number,
-  centerY: number,
-  radius: number
-): Array<{ x: number; y: number }> {
-  if (count === 0) return [];
-  const screenCX = typeof window !== "undefined" ? window.innerWidth / 2 : 500;
-  const screenCY = typeof window !== "undefined" ? window.innerHeight / 2 : 400;
-  const baseAngle = Math.atan2(screenCY - centerY, screenCX - centerX);
-  const spread = Math.min(Math.PI * 1.1, (count - 1) * 0.55 + 0.3);
-  const startAngle = baseAngle - spread / 2;
-  const step = count === 1 ? 0 : spread / (count - 1);
-  return Array.from({ length: count }, (_, i) => ({
-    x: Math.cos(startAngle + i * step) * radius,
-    y: Math.sin(startAngle + i * step) * radius,
-  }));
-}
-
-function getGroupInitial(name: string): string {
-  return name.trim().charAt(0).toUpperCase() || "?";
-}
-
-function getTopTodo(group: TodoGroup): string | null {
-  const item = group.todos.find((t) => !t.completed);
-  return item ? item.text : null;
-}
 
 const DEFAULT_HABITS: Habit[] = [
   {
@@ -99,15 +70,25 @@ function getTodayDateStr(): string {
   return `${year}-${month}-${day}`;
 }
 
+function formatClock(totalSeconds: number): string {
+  const s = Math.max(0, totalSeconds);
+  const mins = Math.floor(s / 60);
+  const secs = Math.floor(s % 60);
+  return `${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
+}
+
 export default function FloatingCircle() {
   const settingsContext = useContext(SettingsContext);
   const contextHabits = settingsContext?.habits;
-  const contextTodoGroups = settingsContext?.todoGroups;
 
   const [storedHabits, setStoredHabits] = useState<Habit[]>(DEFAULT_HABITS);
-  const [storedTodoGroups, setStoredTodoGroups] = useState<TodoGroup[]>([]);
   const [currentEmojiIndex, setCurrentEmojiIndex] = useState(0);
   const [todayStr, setTodayStr] = useState<string>(getTodayDateStr());
+
+  const [pomodoro, setPomodoro] = useState<PomodoroState>(INACTIVE_POMODORO);
+  const [pomodoroNow, setPomodoroNow] = useState<number>(Date.now());
+
+  const pomodoroActive = pomodoro.active;
 
   // Position state with default to top-right
   const [position, setPosition] = useState<Position>(() => {
@@ -122,20 +103,19 @@ export default function FloatingCircle() {
 
   const [isDragging, setIsDragging] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
-  const [satellitesVisible, setSatellitesVisible] = useState(false);
-  const [hoveredSatelliteId, setHoveredSatelliteId] = useState<string | null>(null);
   const [confirmingHabitId, setConfirmingHabitId] = useState<string | null>(null);
   const [justCompletedHabit, setJustCompletedHabit] = useState<string | null>(null);
   const [isTransitioning, setIsTransitioning] = useState(false);
+  const [expandedCircleWidth, setExpandedCircleWidth] = useState(MIN_EXPANDED_CIRCLE_WIDTH);
 
   const confirmTimerRef = useRef<any>(null);
-  const hoverTimeoutRef = useRef<any>(null);
   const dragFrameRef = useRef<number | null>(null);
   const pendingPositionRef = useRef<Position | null>(null);
   const dragOffsetRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
   const startPosRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
   const isDraggingRef = useRef(false);
   const positionRef = useRef(position);
+  const hoverLabelMeasureRef = useRef<HTMLSpanElement>(null);
   positionRef.current = position;
 
   useEffect(() => {
@@ -146,9 +126,6 @@ export default function FloatingCircle() {
 
   // Active list of all habits
   const allHabits = contextHabits && contextHabits.length > 0 ? contextHabits : storedHabits;
-  // Active list of todo groups
-  const allTodoGroups =
-    contextTodoGroups && contextTodoGroups.length > 0 ? contextTodoGroups : storedTodoGroups;
 
   // Update todayStr when date changes (midnight roll)
   useEffect(() => {
@@ -159,6 +136,40 @@ export default function FloatingCircle() {
     const interval = setInterval(checkDate, 60000);
     return () => clearInterval(interval);
   }, []);
+
+  // Load initial pomodoro state and react to changes from other tabs/pages
+  useEffect(() => {
+    let cancelled = false;
+    loadPomodoro().then((loaded) => {
+      if (!cancelled) {
+        setPomodoro(loaded);
+        setPomodoroNow(Date.now());
+      }
+    });
+    const unsubscribe = onPomodoroChange((next) => {
+      if (cancelled) return;
+      setPomodoro(next);
+      setPomodoroNow(Date.now());
+    });
+    return () => {
+      cancelled = true;
+      unsubscribe();
+    };
+  }, []);
+
+  // Tick while a pomodoro session is active so the countdown/progress stays live
+  useEffect(() => {
+    if (!pomodoroActive) return;
+    const id = window.setInterval(() => {
+      setPomodoroNow(Date.now());
+    }, 500);
+    return () => window.clearInterval(id);
+  }, [pomodoroActive]);
+
+  const pomodoroTimeLeft = getTimeLeft(pomodoro, pomodoroNow);
+  const pomodoroProgress = getProgress(pomodoro, pomodoroNow);
+  const pomodoroMode = pomodoro.mode;
+  const pomodoroRunning = pomodoro.running;
 
   // Filter out habits that are ALREADY marked as done for today
   const pendingHabits = allHabits.filter((habit) => {
@@ -222,56 +233,6 @@ export default function FloatingCircle() {
       } catch {}
     };
   }, [contextHabits]);
-
-  // Load todo groups from browser.storage.local (works across all tabs / origins)
-  useEffect(() => {
-    if (contextTodoGroups && contextTodoGroups.length > 0) return;
-
-    let isMounted = true;
-
-    async function loadTodoGroups() {
-      try {
-        if (browser?.storage?.local) {
-          const stored = await browser.storage.local.get(TODO_GROUPS_STORAGE_KEY);
-          const groups = stored[TODO_GROUPS_STORAGE_KEY] as TodoGroup[] | undefined;
-          if (isMounted && Array.isArray(groups) && groups.length > 0) {
-            setStoredTodoGroups(groups);
-          }
-        }
-      } catch (err) {
-        console.warn("[Halberd] Could not load todo groups from storage:", err);
-      }
-    }
-
-    loadTodoGroups();
-
-    const handleTodoGroupsChange = (
-      changes: Record<string, { oldValue?: any; newValue?: any }>,
-      areaName?: string
-    ) => {
-      if ((!areaName || areaName === "local") && changes[TODO_GROUPS_STORAGE_KEY]?.newValue) {
-        const newGroups = changes[TODO_GROUPS_STORAGE_KEY].newValue as TodoGroup[];
-        if (Array.isArray(newGroups)) {
-          setStoredTodoGroups(newGroups);
-        }
-      }
-    };
-
-    try {
-      if (browser?.storage?.onChanged) {
-        browser.storage.onChanged.addListener(handleTodoGroupsChange);
-      }
-    } catch {}
-
-    return () => {
-      isMounted = false;
-      try {
-        if (browser?.storage?.onChanged) {
-          browser.storage.onChanged.removeListener(handleTodoGroupsChange);
-        }
-      } catch {};
-    };
-  }, [contextTodoGroups]);
 
   // Wall-clock epoch synchronized slideshow across ALL tabs and pages
   // Slideshow pauses while user is in confirmation mode
@@ -393,6 +354,7 @@ export default function FloatingCircle() {
 
   // Handle click with confirmation requirement
   const handleHabitClick = () => {
+    if (pomodoroActive) return;
     if (!currentHabit) return;
 
     // STEP 2: If already in confirmation mode for this habit, mark as complete!
@@ -546,8 +508,12 @@ export default function FloatingCircle() {
   // Determine displayed emoji & state
   const isAllDone = pendingHabits.length === 0;
   const isConfirming = confirmingHabitId !== null;
+  const pomodoroModeLabel = pomodoroMode === "focus" ? "Focus" : "Rest";
+  const pomodoroClock = formatClock(pomodoroTimeLeft);
 
-  const displayEmoji = justCompletedHabit
+  const displayEmoji = pomodoroActive
+    ? "🍅"
+    : justCompletedHabit
     ? "🎉"
     : isConfirming
     ? "✅"
@@ -555,7 +521,9 @@ export default function FloatingCircle() {
     ? "🎉"
     : currentHabit?.emoji || "⚔️";
 
-  const nativeTitle = isConfirming
+  const nativeTitle = pomodoroActive
+    ? `Pomodoro · ${pomodoroModeLabel} · ${pomodoroClock}${pomodoroRunning ? "" : " (paused)"}`
+    : isConfirming
     ? "is it really completed?"
     : justCompletedHabit
     ? `Done: ${justCompletedHabit}! 🎉`
@@ -565,18 +533,33 @@ export default function FloatingCircle() {
     ? `Click to complete "${currentHabit.name}"`
     : "Halberd";
 
-   // Keep the confirmation tooltip beside the circle.
-    const tooltipOnRight = typeof window !== "undefined" && position.x < window.innerWidth / 2;
+  const hoverLabel = pomodoroActive
+    ? `Pomodoro · ${pomodoroModeLabel} · ${pomodoroClock}`
+    : justCompletedHabit || (isAllDone ? "All habits done" : currentHabit?.name) || "Halberd";
 
-  // Satellite geometry
-   const mainCX = position.x + CIRCLE_SIZE / 2;
-   const mainCY = position.y + CIRCLE_SIZE / 2;
-  const satelliteOffsets = getSatellitePositions(
-    allTodoGroups.length,
-    mainCX,
-    mainCY,
-    SATELLITE_RADIUS
-  );
+  useEffect(() => {
+    const label = hoverLabelMeasureRef.current;
+    if (!label) return;
+    const textWidth = Math.ceil(label.getBoundingClientRect().width);
+    const contentWidth = textWidth + CIRCLE_SIZE + ICON_TEXT_GAP + EXPANDED_HORIZONTAL_PADDING * 2;
+    setExpandedCircleWidth(
+      Math.min(MAX_EXPANDED_CIRCLE_WIDTH, Math.max(MIN_EXPANDED_CIRCLE_WIDTH, contentWidth)),
+    );
+  }, [hoverLabel]);
+
+     // Keep the confirmation tooltip beside the circle.
+     const tooltipOnRight = typeof window !== "undefined" && position.x < window.innerWidth / 2;
+
+     // Pomodoro pill anchors & palette. The collapsed pill is centered on the
+     // circle; on hover it expands right (left half) or left (right half).
+     const pomodoroProgressColor = pomodoroMode === "focus" ? "#5cbe70" : "#d5aa5c";
+     const pomodoroBorderColor = pomodoroMode === "focus" ? "#76a67f" : "#d0a07a";
+     const pomodoroCollapsedLeft = -(POMODORO_COLLAPSED_WIDTH - CIRCLE_SIZE) / 2;
+     const pomodoroPillLeft = isHovered
+       ? tooltipOnRight
+         ? pomodoroCollapsedLeft
+         : pomodoroCollapsedLeft - (expandedCircleWidth - POMODORO_COLLAPSED_WIDTH)
+       : pomodoroCollapsedLeft;
 
   return (
     <>
@@ -587,123 +570,6 @@ export default function FloatingCircle() {
           100% { transform: translateY(0) scale(1); opacity: 1; }
         }
       `}</style>
-
-      {/* Satellite circles — one per todo group, rendered at fixed positions */}
-      {allTodoGroups.map((group, i) => {
-        const offset = satelliteOffsets[i];
-        if (!offset) return null;
-        const palette = SATELLITE_COLORS[i % SATELLITE_COLORS.length]!;
-        const topTodo = getTopTodo(group);
-        const initial = getGroupInitial(group.name);
-        const isHov = hoveredSatelliteId === group.id;
-        const satAbsX = mainCX + offset.x;
-        const satAbsY = mainCY + offset.y;
-         const tooltipOnRight = typeof window !== "undefined" && satAbsX < window.innerWidth / 2;
-
-        return (
-          <div
-            key={group.id}
-            style={{
-              position: "fixed",
-              left: `${satAbsX - SATELLITE_SIZE / 2}px`,
-              top: `${satAbsY - SATELLITE_SIZE / 2}px`,
-              width: `${SATELLITE_SIZE}px`,
-              height: `${SATELLITE_SIZE}px`,
-              zIndex: 2147483646,
-              pointerEvents: satellitesVisible ? "auto" : "none",
-            }}
-            onMouseEnter={() => {
-              if (hoverTimeoutRef.current) clearTimeout(hoverTimeoutRef.current);
-              setSatellitesVisible(true);
-              setHoveredSatelliteId(group.id);
-            }}
-            onMouseLeave={() => {
-              hoverTimeoutRef.current = setTimeout(() => {
-                setHoveredSatelliteId(null);
-                setSatellitesVisible(false);
-              }, 120);
-            }}
-          >
-            {/* Satellite dot */}
-            <div
-              style={{
-                width: `${SATELLITE_SIZE}px`,
-                height: `${SATELLITE_SIZE}px`,
-                borderRadius: "50%",
-                 backgroundColor: palette.bg,
-                 border: `1.5px solid ${palette.border}`,
-                 boxShadow: isHov
-                   ? `0 6px 14px rgba(0,0,0,0.16), 0 0 0 2px ${palette.border}`
-                   : "0 3px 8px rgba(0,0,0,0.12)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                fontFamily: "Inter, system-ui, sans-serif",
-                fontSize: "13px",
-                fontWeight: 700,
-                color: palette.text,
-                letterSpacing: "0.01em",
-                transform: satellitesVisible
-                  ? isHov
-                    ? "scale(1.2)"
-                    : "scale(1)"
-                  : "scale(0)",
-                opacity: satellitesVisible ? 1 : 0,
-                transition: satellitesVisible
-                  ? `transform 0.3s cubic-bezier(0.34,1.56,0.64,1) ${i * 45}ms, opacity 0.22s ease ${i * 45}ms, box-shadow 0.18s ease`
-                  : `transform 0.18s ease ${(allTodoGroups.length - 1 - i) * 30}ms, opacity 0.15s ease ${(allTodoGroups.length - 1 - i) * 30}ms`,
-              }}
-            >
-              {initial}
-            </div>
-
-            {/* Tooltip — top incomplete todo */}
-            {isHov && (
-              <div
-                style={{
-                  position: "absolute",
-                   [tooltipOnRight ? "left" : "right"]: `${SATELLITE_SIZE + 8}px`,
-                   top: "50%",
-                   transform: "translateY(-50%)",
-                   backgroundColor: "#0a121e",
-                  color: "#e8f0ea",
-                  padding: "8px 13px",
-                  borderRadius: "10px",
-                  fontSize: "11.5px",
-                  fontWeight: 500,
-                  fontFamily: "Inter, system-ui, sans-serif",
-                  whiteSpace: "nowrap",
-                  maxWidth: "220px",
-                  overflow: "hidden",
-                  textOverflow: "ellipsis",
-                   boxShadow: "0 8px 18px rgba(0,0,0,0.2)",
-                   border: `1px solid ${palette.border}`,
-                  pointerEvents: "none",
-                  zIndex: 2147483647,
-                  animation: "halberd-tooltip-pop 0.18s cubic-bezier(0.34, 1.56, 0.64, 1)",
-                  lineHeight: "1.45",
-                }}
-              >
-                <div
-                  style={{
-                    fontSize: "9px",
-                    textTransform: "uppercase",
-                    letterSpacing: "0.08em",
-                    color: palette.bg,
-                    marginBottom: "3px",
-                    fontWeight: 700,
-                  }}
-                >
-                  {group.name}
-                </div>
-                <div style={{ color: topTodo ? "#e8f0ea" : "#94c7a4" }}>
-                  {topTodo ?? "✓ All done!"}
-                </div>
-              </div>
-            )}
-          </div>
-        );
-      })}
 
     <div
       style={{
@@ -727,18 +593,8 @@ export default function FloatingCircle() {
        onPointerMove={handlePointerMove}
        onPointerUp={handlePointerUp}
        onPointerCancel={handlePointerCancel}
-       onMouseEnter={() => {
-         setIsHovered(true);
-         if (hoverTimeoutRef.current) clearTimeout(hoverTimeoutRef.current);
-         setSatellitesVisible(true);
-       }}
-       onMouseLeave={() => {
-         setIsHovered(false);
-         hoverTimeoutRef.current = setTimeout(() => {
-           setSatellitesVisible(false);
-           setHoveredSatelliteId(null);
-         }, 120);
-       }}
+        onMouseEnter={() => setIsHovered(true)}
+        onMouseLeave={() => setIsHovered(false)}
        title={nativeTitle}
      >
         {/* Visual Tooltip for Confirmation */}
@@ -758,7 +614,7 @@ export default function FloatingCircle() {
             whiteSpace: "nowrap",
             boxShadow: "0 10px 25px -3px rgba(0, 0, 0, 0.35), 0 4px 6px -2px rgba(0, 0, 0, 0.2)",
              border: "1px solid #334155",
-            pointerEvents: "none",
+             pointerEvents: "none",
             display: "flex",
             alignItems: "center",
             gap: "6px",
@@ -770,48 +626,153 @@ export default function FloatingCircle() {
         </div>
       )}
 
-        <div
-          style={{
-            position: "absolute",
-            left: 0,
-            top: 0,
-            width: `${CIRCLE_SIZE}px`,
-            height: `${CIRCLE_SIZE}px`,
-            boxSizing: "border-box",
-            borderRadius: "50%",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            backgroundColor: isConfirming ? "#e8f7ec" : justCompletedHabit ? "#fff4dc" : "#eff8f1",
-            border: isConfirming ? "2px solid #5cbe70" : justCompletedHabit ? "2px solid #d5aa5c" : "1px solid #8fb69a",
-            boxShadow: isDragging
-              ? "0 10px 18px rgba(54, 82, 61, 0.2), 0 0 0 2px #76a67f"
-              : isConfirming
-              ? "0 8px 16px rgba(54, 139, 74, 0.18), 0 0 0 1px #5cbe70"
-              : justCompletedHabit
-              ? "0 8px 16px rgba(183, 132, 50, 0.16), 0 0 0 1px #d5aa5c"
-              : isHovered
-              ? "0 8px 16px rgba(54, 82, 61, 0.16), 0 0 0 1px #76a67f"
-              : "0 5px 12px rgba(54, 82, 61, 0.14)",
-            pointerEvents: "none",
-          }}
-        >
-          <div
-            style={{
-              pointerEvents: "none",
-              userSelect: "none",
-              WebkitUserSelect: "none",
-              display: "inline-flex",
-              alignItems: "center",
-              justifyContent: "center",
-              transform: isTransitioning ? "scale(0.7) rotate(-10deg)" : isConfirming ? "scale(1.1)" : "scale(1)",
-              opacity: isTransitioning ? 0.4 : 1,
-              transition: "transform 0.2s ease, opacity 0.2s ease",
-            }}
-          >
-            <AnimatedEmoji emoji={displayEmoji} size={24} />
-          </div>
-        </div>
+      <div
+        style={{
+          position: "absolute",
+          left: pomodoroActive
+            ? pomodoroPillLeft
+            : isHovered && !tooltipOnRight ? `-${expandedCircleWidth - CIRCLE_SIZE}px` : 0,
+          top: 0,
+          width: `${pomodoroActive ? (isHovered ? expandedCircleWidth : POMODORO_COLLAPSED_WIDTH) : isHovered ? expandedCircleWidth : CIRCLE_SIZE}px`,
+          height: `${CIRCLE_SIZE}px`,
+          boxSizing: "border-box",
+          borderRadius: `${CIRCLE_SIZE / 2}px`,
+          display: "flex",
+          alignItems: "center",
+          flexDirection: "row",
+          overflow: "hidden",
+          justifyContent: pomodoroActive ? "center" : "flex-start",
+          gap: pomodoroActive ? 0 : isHovered ? `${ICON_TEXT_GAP}px` : 0,
+          backgroundColor: pomodoroActive
+            ? "#eff8f1"
+            : isConfirming ? "#e8f7ec" : justCompletedHabit ? "#fff4dc" : "#eff8f1",
+          border: pomodoroActive
+            ? `2px solid ${pomodoroBorderColor}`
+            : isConfirming ? "2px solid #5cbe70" : justCompletedHabit ? "2px solid #d5aa5c" : "1px solid #8fb69a",
+          boxShadow: isDragging
+            ? "0 10px 18px rgba(54, 82, 61, 0.2), 0 0 0 2px #76a67f"
+            : isConfirming
+            ? "0 8px 16px rgba(54, 139, 74, 0.18), 0 0 0 1px #5cbe70"
+            : justCompletedHabit
+            ? "0 8px 16px rgba(183, 132, 50, 0.16), 0 0 0 1px #d5aa5c"
+            : isHovered
+            ? "0 8px 16px rgba(54, 82, 61, 0.16), 0 0 0 1px #76a67f"
+            : "0 5px 12px rgba(54, 82, 61, 0.14)",
+          padding: !pomodoroActive && isHovered ? "0 10px" : 0,
+          transition: "left 0.22s ease, width 0.22s ease, padding 0.22s ease, background-color 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease",
+          pointerEvents: pomodoroActive ? "auto" : isHovered ? "auto" : "none",
+        }}
+        onMouseEnter={() => {
+          if (pomodoroActive) setIsHovered(true);
+        }}
+        onMouseLeave={() => {
+          if (pomodoroActive) setIsHovered(false);
+        }}
+      >
+        {pomodoroActive ? (
+          <>
+            <span
+              ref={hoverLabelMeasureRef}
+              aria-hidden="true"
+              style={{
+                position: "absolute",
+                visibility: "hidden",
+                whiteSpace: "nowrap",
+                fontFamily: "Inter, system-ui, sans-serif",
+                fontSize: "11px",
+                fontWeight: 600,
+              }}
+            >
+              {hoverLabel}
+            </span>
+            <span
+              style={{
+                whiteSpace: "nowrap",
+                color: "#43604c",
+                fontFamily: "Inter, system-ui, sans-serif",
+                fontSize: "11px",
+                fontWeight: 700,
+                lineHeight: 1,
+                transition: "font-size 0.22s ease",
+              }}
+            >
+              {isHovered ? hoverLabel : "Pomodoro"}
+            </span>
+            {/* Progress along the border of the pill */}
+            <div
+              style={{
+                position: "absolute",
+                inset: 0,
+                borderRadius: "inherit",
+                padding: 2,
+                background: `conic-gradient(${pomodoroProgressColor} ${Math.max(
+                  0,
+                  Math.min(100, pomodoroProgress * 100)
+                )}%, transparent 0)`,
+                WebkitMask:
+                  "linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)",
+                WebkitMaskComposite: "xor",
+                mask: "linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)",
+                maskComposite: "exclude",
+                pointerEvents: "none",
+              }}
+            />
+          </>
+        ) : (
+          <>
+            <span
+              ref={hoverLabelMeasureRef}
+              aria-hidden="true"
+              style={{
+                position: "absolute",
+                visibility: "hidden",
+                whiteSpace: "nowrap",
+                fontFamily: "Inter, system-ui, sans-serif",
+                fontSize: "11px",
+                fontWeight: 600,
+              }}
+            >
+              {hoverLabel}
+            </span>
+            <div
+              style={{
+                flex: `0 0 ${CIRCLE_SIZE}px`,
+                width: `${CIRCLE_SIZE}px`,
+                height: `${CIRCLE_SIZE}px`,
+                pointerEvents: "none",
+                userSelect: "none",
+                WebkitUserSelect: "none",
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                transform: isTransitioning ? "scale(0.7) rotate(-10deg)" : isConfirming ? "scale(1.1)" : "scale(1)",
+                opacity: isTransitioning ? 0.4 : 1,
+                transition: "transform 0.2s ease, opacity 0.2s ease",
+              }}
+            >
+              <AnimatedEmoji emoji={displayEmoji} size={24} />
+            </div>
+            <span
+              style={{
+                width: isHovered ? `${expandedCircleWidth - CIRCLE_SIZE - ICON_TEXT_GAP - EXPANDED_HORIZONTAL_PADDING * 2}px` : 0,
+                maxWidth: isHovered ? `${expandedCircleWidth - CIRCLE_SIZE - ICON_TEXT_GAP - EXPANDED_HORIZONTAL_PADDING * 2}px` : 0,
+                overflow: "hidden",
+                opacity: isHovered ? 1 : 0,
+                color: "#43604c",
+                fontFamily: "Inter, system-ui, sans-serif",
+                fontSize: "11px",
+                fontWeight: 600,
+                lineHeight: 1,
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+                transition: "max-width 0.22s ease, opacity 0.16s ease",
+              }}
+            >
+              {hoverLabel}
+            </span>
+          </>
+        )}
+      </div>
       </div>
     </>
   );
