@@ -12,6 +12,14 @@ import {
   loadPomodoro,
   onPomodoroChange,
 } from "@/lib/pomodoro";
+import {
+  type FocusModeState,
+  INACTIVE_FOCUS_MODE,
+  getTimeLeft as getFocusTimeLeft,
+  getProgress as getFocusProgress,
+  loadFocusMode,
+  onFocusModeChange,
+} from "@/lib/focusMode";
 
 const STORAGE_KEY = "halberd_floating_circle_pos";
 const HABITS_STORAGE_KEY = "halberd_habits";
@@ -89,6 +97,15 @@ export default function FloatingCircle() {
   const [pomodoroNow, setPomodoroNow] = useState<number>(Date.now());
 
   const pomodoroActive = pomodoro.active;
+
+  const [focusMode, setFocusMode] = useState<FocusModeState>(INACTIVE_FOCUS_MODE);
+  const [focusNow, setFocusNow] = useState<number>(Date.now());
+
+  const focusModeActive = focusMode.active;
+
+  // Priority: pomodoro takes precedence over focus mode
+  const showPomodoro = pomodoroActive;
+  const showFocusMode = !showPomodoro && focusModeActive;
 
   // Position state with default to top-right
   const [position, setPosition] = useState<Position>(() => {
@@ -170,6 +187,61 @@ export default function FloatingCircle() {
   const pomodoroProgress = getProgress(pomodoro, pomodoroNow);
   const pomodoroMode = pomodoro.mode;
   const pomodoroRunning = pomodoro.running;
+  const pomodoroModeLabel = pomodoroMode === "focus" ? "Focus" : "Rest";
+
+  // Load initial focus mode state and react to changes from other tabs/pages
+  useEffect(() => {
+    let cancelled = false;
+    loadFocusMode().then((loaded) => {
+      if (!cancelled) {
+        setFocusMode(loaded);
+        setFocusNow(Date.now());
+      }
+    });
+    const unsubscribe = onFocusModeChange((next) => {
+      if (cancelled) return;
+      setFocusMode(next);
+      setFocusNow(Date.now());
+    });
+    return () => {
+      cancelled = true;
+      unsubscribe();
+    };
+  }, []);
+
+  // Tick while a focus mode session is active so the countdown/progress stays live
+  useEffect(() => {
+    if (!focusModeActive) return;
+    const id = window.setInterval(() => {
+      setFocusNow(Date.now());
+    }, 500);
+    return () => window.clearInterval(id);
+  }, [focusModeActive]);
+
+  const focusTimeLeft = getFocusTimeLeft(focusMode, focusNow);
+  const focusProgress = getFocusProgress(focusMode, focusNow);
+  const focusRunning = focusMode.running;
+
+  // Unified "timer" display — a flyby timer (pomodoro or focus mode) suppresses
+  // the habit UI on the circle. Pomodoro takes precedence over focus mode.
+  const timerActive = showPomodoro || showFocusMode;
+  const timerClock = formatClock(showPomodoro ? pomodoroTimeLeft : focusTimeLeft);
+  const timerRunning = showPomodoro ? pomodoroRunning : focusRunning;
+  const timerProgress = showPomodoro ? pomodoroProgress : focusProgress;
+  const timerProgressColor = showPomodoro
+    ? pomodoroMode === "focus"
+      ? "#5cbe70"
+      : "#d5aa5c"
+    : "#5cbe70";
+  const timerBorderColor = showPomodoro
+    ? pomodoroMode === "focus"
+      ? "#76a67f"
+      : "#d0a07a"
+    : "#76a67f";
+  const timerTitle = showPomodoro
+    ? `Pomodoro · ${pomodoroModeLabel} · ${timerClock}`
+    : `Focus · ${timerClock}`;
+  const timerCollapsedLabel = showPomodoro ? "Pomodoro" : "Focus";
 
   // Filter out habits that are ALREADY marked as done for today
   const pendingHabits = allHabits.filter((habit) => {
@@ -380,7 +452,7 @@ export default function FloatingCircle() {
 
   // Handle click with confirmation requirement
   const handleHabitClick = () => {
-    if (pomodoroActive) return;
+    if (timerActive) return;
     if (!currentHabit) return;
 
     // STEP 2: If already in confirmation mode for this habit, mark as complete!
@@ -534,10 +606,8 @@ export default function FloatingCircle() {
   // Determine displayed emoji & state
   const isAllDone = pendingHabits.length === 0;
   const isConfirming = confirmingHabitId !== null;
-  const pomodoroModeLabel = pomodoroMode === "focus" ? "Focus" : "Rest";
-  const pomodoroClock = formatClock(pomodoroTimeLeft);
 
-  const displayEmoji = pomodoroActive
+  const displayEmoji = timerActive
     ? "🍅"
     : justCompletedHabit
     ? "🎉"
@@ -547,8 +617,8 @@ export default function FloatingCircle() {
     ? "🎉"
     : currentHabit?.emoji || "⚔️";
 
-  const nativeTitle = pomodoroActive
-    ? `Pomodoro · ${pomodoroModeLabel} · ${pomodoroClock}${pomodoroRunning ? "" : " (paused)"}`
+  const nativeTitle = timerActive
+    ? `${timerTitle}${timerRunning ? "" : " (paused)"}`
     : isConfirming
     ? "is it really completed?"
     : justCompletedHabit
@@ -559,8 +629,8 @@ export default function FloatingCircle() {
     ? `Click to complete "${currentHabit.name}"`
     : "Halberd";
 
-  const hoverLabel = pomodoroActive
-    ? `Pomodoro · ${pomodoroModeLabel} · ${pomodoroClock}`
+  const hoverLabel = timerActive
+    ? timerTitle
     : justCompletedHabit || (isAllDone ? "All habits done" : currentHabit?.name) || "Halberd";
 
   useEffect(() => {
@@ -576,16 +646,14 @@ export default function FloatingCircle() {
      // Keep the confirmation tooltip beside the circle.
      const tooltipOnRight = typeof window !== "undefined" && position.x < window.innerWidth / 2;
 
-     // Pomodoro pill anchors & palette. The collapsed pill is centered on the
+     // Timer pill anchors & palette. The collapsed pill is centered on the
      // circle; on hover it expands right (left half) or left (right half).
-     const pomodoroProgressColor = pomodoroMode === "focus" ? "#5cbe70" : "#d5aa5c";
-     const pomodoroBorderColor = pomodoroMode === "focus" ? "#76a67f" : "#d0a07a";
-     const pomodoroCollapsedLeft = -(POMODORO_COLLAPSED_WIDTH - CIRCLE_SIZE) / 2;
-     const pomodoroPillLeft = isHovered
+     const timerCollapsedLeft = -(POMODORO_COLLAPSED_WIDTH - CIRCLE_SIZE) / 2;
+     const timerPillLeft = isHovered
        ? tooltipOnRight
-         ? pomodoroCollapsedLeft
-         : pomodoroCollapsedLeft - (expandedCircleWidth - POMODORO_COLLAPSED_WIDTH)
-       : pomodoroCollapsedLeft;
+         ? timerCollapsedLeft
+         : timerCollapsedLeft - (expandedCircleWidth - POMODORO_COLLAPSED_WIDTH)
+       : timerCollapsedLeft;
 
   return (
     <>
@@ -655,11 +723,11 @@ export default function FloatingCircle() {
       <div
         style={{
           position: "absolute",
-          left: pomodoroActive
-            ? pomodoroPillLeft
+          left: timerActive
+            ? timerPillLeft
             : isHovered && !tooltipOnRight ? `-${expandedCircleWidth - CIRCLE_SIZE}px` : 0,
           top: 0,
-          width: `${pomodoroActive ? (isHovered ? expandedCircleWidth : POMODORO_COLLAPSED_WIDTH) : isHovered ? expandedCircleWidth : CIRCLE_SIZE}px`,
+          width: `${timerActive ? (isHovered ? expandedCircleWidth : POMODORO_COLLAPSED_WIDTH) : isHovered ? expandedCircleWidth : CIRCLE_SIZE}px`,
           height: `${CIRCLE_SIZE}px`,
           boxSizing: "border-box",
           borderRadius: `${CIRCLE_SIZE / 2}px`,
@@ -667,13 +735,13 @@ export default function FloatingCircle() {
           alignItems: "center",
           flexDirection: "row",
           overflow: "hidden",
-          justifyContent: pomodoroActive ? "center" : "flex-start",
-          gap: pomodoroActive ? 0 : isHovered ? `${ICON_TEXT_GAP}px` : 0,
-          backgroundColor: pomodoroActive
+          justifyContent: timerActive ? "center" : "flex-start",
+          gap: timerActive ? 0 : isHovered ? `${ICON_TEXT_GAP}px` : 0,
+          backgroundColor: timerActive
             ? "#eff8f1"
             : isConfirming ? "#e8f7ec" : justCompletedHabit ? "#fff4dc" : "#eff8f1",
-          border: pomodoroActive
-            ? `2px solid ${pomodoroBorderColor}`
+          border: timerActive
+            ? `2px solid ${timerBorderColor}`
             : isConfirming ? "2px solid #5cbe70" : justCompletedHabit ? "2px solid #d5aa5c" : "1px solid #8fb69a",
           boxShadow: isDragging
             ? "0 10px 18px rgba(54, 82, 61, 0.2), 0 0 0 2px #76a67f"
@@ -684,18 +752,18 @@ export default function FloatingCircle() {
             : isHovered
             ? "0 8px 16px rgba(54, 82, 61, 0.16), 0 0 0 1px #76a67f"
             : "0 5px 12px rgba(54, 82, 61, 0.14)",
-          padding: !pomodoroActive && isHovered ? "0 10px" : 0,
+          padding: !timerActive && isHovered ? "0 10px" : 0,
           transition: "left 0.22s ease, width 0.22s ease, padding 0.22s ease, background-color 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease",
-          pointerEvents: pomodoroActive ? "auto" : isHovered ? "auto" : "none",
+          pointerEvents: timerActive ? "auto" : isHovered ? "auto" : "none",
         }}
         onMouseEnter={() => {
-          if (pomodoroActive) setIsHovered(true);
+          if (timerActive) setIsHovered(true);
         }}
         onMouseLeave={() => {
-          if (pomodoroActive) setIsHovered(false);
+          if (timerActive) setIsHovered(false);
         }}
       >
-        {pomodoroActive ? (
+        {timerActive ? (
           <>
             <span
               ref={hoverLabelMeasureRef}
@@ -722,7 +790,7 @@ export default function FloatingCircle() {
                 transition: "font-size 0.22s ease",
               }}
             >
-              {isHovered ? hoverLabel : "Pomodoro"}
+              {isHovered ? hoverLabel : timerCollapsedLabel}
             </span>
             {/* Progress along the border of the pill */}
             <div
@@ -731,9 +799,9 @@ export default function FloatingCircle() {
                 inset: 0,
                 borderRadius: "inherit",
                 padding: 2,
-                background: `conic-gradient(${pomodoroProgressColor} ${Math.max(
+                background: `conic-gradient(${timerProgressColor} ${Math.max(
                   0,
-                  Math.min(100, pomodoroProgress * 100)
+                  Math.min(100, timerProgress * 100)
                 )}%, transparent 0)`,
                 WebkitMask:
                   "linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)",

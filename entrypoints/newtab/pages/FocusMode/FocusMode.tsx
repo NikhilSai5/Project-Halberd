@@ -3,6 +3,20 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useAuth } from "@/lib/AuthContext";
 import { userStorageKey } from "@/lib/userStorage";
+import {
+  type FocusModeState,
+  INACTIVE_FOCUS_MODE,
+  getTimeLeft,
+  isSessionComplete,
+  startSession,
+  pauseSession,
+  stopSession,
+  resetSession,
+  completeSession,
+  setDuration as engineSetDuration,
+  loadFocusMode,
+  saveFocusMode,
+} from "@/lib/focusMode";
 
 const DEFAULT_FOCUS_TIME = 25 * 60;
 
@@ -17,26 +31,49 @@ interface Session {
 
 export default function FocusMode() {
   const { user } = useAuth();
-  const [focusTime, setFocusTime] = useState(DEFAULT_FOCUS_TIME);
-  const [timeLeft, setTimeLeft] = useState(focusTime);
-  const [isRunning, setIsRunning] = useState(false);
+
+  const [state, setState] = useState<FocusModeState>(INACTIVE_FOCUS_MODE);
+  const [now, setNow] = useState<number>(Date.now());
   const [sessionsCompleted, setSessionsCompleted] = useState(0);
   const [showHistory, setShowHistory] = useState(false);
   const [isEditingTimer, setIsEditingTimer] = useState(false);
   const [editTimerValue, setEditTimerValue] = useState("");
   const [taskName, setTaskName] = useState("Build Halberd");
   const [history, setHistory] = useState<Session[]>([]);
-  
-  const intervalRef = useRef<number | null>(null);
+
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const timerInputRef = useRef<HTMLInputElement>(null);
+  const stateRef = useRef<FocusModeState>(state);
+  stateRef.current = state;
+  const taskNameRef = useRef(taskName);
+  taskNameRef.current = taskName;
 
+  const focusTime = state.duration;
+  const isRunning = state.running;
+  const timeLeft = getTimeLeft(state, now);
+
+  // Hydrate global focus mode state (restores an in-progress session across tabs/pages)
+  useEffect(() => {
+    let cancelled = false;
+    loadFocusMode().then((loaded) => {
+      if (!cancelled) setState(loaded);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Load per-user duration + history settings (for the edit popup / history view)
   useEffect(() => {
     if (!user) return;
     const storedTime = localStorage.getItem(userStorageKey(user.id, "focus_time"));
     const storedHistory = localStorage.getItem(userStorageKey(user.id, "focus_history"));
     const nextTime = storedTime ? parseInt(storedTime, 10) : DEFAULT_FOCUS_TIME;
-    setFocusTime(nextTime); setTimeLeft(nextTime);
+    setState((prev) => ({
+      ...prev,
+      duration: nextTime,
+      ...(prev.active || prev.running ? {} : { pausedTimeLeft: nextTime, sessionEndsAt: 0 }),
+    }));
     if (storedHistory) {
       try { setHistory(JSON.parse(storedHistory)); } catch { setHistory([]); }
     } else setHistory([]);
@@ -52,30 +89,14 @@ export default function FocusMode() {
     localStorage.setItem(userStorageKey(user.id, "focus_history"), JSON.stringify(history));
   }, [history, user?.id]);
 
-  useEffect(() => {
-    if (!isRunning) return;
-    intervalRef.current = window.setInterval(() => {
-      setTimeLeft((prev) => {
-        if (prev <= 1) {
-          clearInterval(intervalRef.current!);
-          handleSessionComplete();
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-    return () => {
-      if (intervalRef.current) clearInterval(intervalRef.current);
-    };
-  }, [isRunning]);
+  // --------------------------------------------------
+  // Persist global focus mode state (drives the floating circle
+  // in every tab & page while a session is active)
+  // --------------------------------------------------
 
   useEffect(() => {
-    if (timeLeft === 0 && !isRunning) {
-      if (audioRef.current) {
-        audioRef.current.play().catch(() => {});
-      }
-    }
-  }, [timeLeft, isRunning]);
+    saveFocusMode(state);
+  }, [state]);
 
   const formatTime = useCallback((seconds: number) => {
     const mins = Math.floor(seconds / 60).toString().padStart(2, "0");
@@ -97,8 +118,13 @@ export default function FocusMode() {
       const secs = parts[1] ?? 0;
       if (!isNaN(mins) && !isNaN(secs) && secs < 60) {
         const totalSeconds = mins * 60 + secs;
-        setTimeLeft(totalSeconds);
-        setFocusTime(totalSeconds);
+        setState((prev) => {
+          const next = engineSetDuration(prev, totalSeconds);
+          if (!prev.running && !prev.active) {
+            next.pausedTimeLeft = totalSeconds;
+          }
+          return next;
+        });
       }
     }
     setIsEditingTimer(false);
@@ -124,50 +150,84 @@ export default function FocusMode() {
   }, [handleTimerEditSubmit]);
 
   const handleSessionComplete = useCallback(() => {
+    const current = stateRef.current;
     const now = new Date();
     const session: Session = {
       id: `${Date.now()}`,
       date: now.toLocaleDateString(),
-      duration: focusTime,
+      duration: current.duration,
       completedAt: now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-      taskName,
+      taskName: taskNameRef.current,
       completed: true,
     };
 
     setHistory((prev) => [session, ...prev].slice(0, 50));
     setSessionsCompleted((prev) => prev + 1);
-    setIsRunning(false);
-    setTimeLeft(focusTime);
-  }, [focusTime, taskName]);
+    setState(completeSession(current));
+    setNow(Date.now());
+  }, []);
+
+  // Tick: re-render while running and auto-complete when the session ends.
+  // The countdown is timestamp based (see lib/focusMode) so it stays accurate
+  // even when this page is in the background.
+  useEffect(() => {
+    if (!isRunning) return;
+
+    const id = window.setInterval(() => {
+      const current = stateRef.current;
+      if (isSessionComplete(current)) {
+        handleSessionComplete();
+      } else {
+        setNow(Date.now());
+      }
+    }, 250);
+
+    return () => window.clearInterval(id);
+  }, [isRunning, handleSessionComplete]);
+
+  // Play sound when timer reaches zero
+  useEffect(() => {
+    if (timeLeft === 0 && !isRunning) {
+      if (audioRef.current) {
+        audioRef.current.play().catch(() => {});
+      }
+    }
+  }, [timeLeft, isRunning]);
 
   const handleStartPause = useCallback(() => {
-    if (timeLeft === 0) {
-      setTimeLeft(focusTime);
+    const current = stateRef.current;
+    if (current.running) {
+      setState(pauseSession(current, Date.now()));
+    } else {
+      setState(startSession(current));
     }
-    setIsRunning(!isRunning);
-  }, [timeLeft, focusTime, isRunning]);
+    setNow(Date.now());
+  }, []);
 
   const handleStop = useCallback(() => {
-    if (timeLeft < focusTime && timeLeft > 0) {
+    const current = stateRef.current;
+    const nowMs = Date.now();
+    const left = getTimeLeft(current, nowMs);
+    if (left > 0 && left < current.duration) {
       const now = new Date();
       const session: Session = {
         id: `${Date.now()}`,
         date: now.toLocaleDateString(),
-        duration: focusTime - timeLeft,
+        duration: current.duration - left,
         completedAt: now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-        taskName,
+        taskName: taskNameRef.current,
         completed: false,
       };
       setHistory((prev) => [session, ...prev].slice(0, 50));
     }
-    setIsRunning(false);
-    setTimeLeft(focusTime);
-  }, [focusTime, timeLeft, taskName]);
+    setState(stopSession(current));
+    setNow(nowMs);
+  }, []);
 
   const handleReset = useCallback(() => {
-    setIsRunning(false);
-    setTimeLeft(focusTime);
-  }, [focusTime]);
+    setState(resetSession(stateRef.current));
+    setNow(Date.now());
+  }, []);
 
   const clearHistory = () => {
     setHistory([]);
