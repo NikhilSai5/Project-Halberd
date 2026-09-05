@@ -12,6 +12,7 @@ import {
   getGoogleConnection,
   listGoogleTasks,
   listGoogleTaskLists,
+  refreshSharedGoogleSession,
   updateGoogleTask,
   updateGoogleTaskList,
 } from "@/lib/googleIntegrations";
@@ -540,6 +541,16 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     void sync();
     return () => { cancelled = true; };
   }, [todoGroups, initialized, user?.id]);
+
+// Mirror Google tokens/connections into browser.storage.local so content
+  // scripts (floating circle on other tabs) can read them.
+  useEffect(() => {
+    if (!user?.id) return;
+    const connection = getGoogleConnection(user.id);
+    if (connection.calendar || connection.tasks) {
+      void refreshSharedGoogleSession(user.id);
+    }
+  }, [user?.id]);
 
   useEffect(() => {
     const handleTasksConnected = () => setTodoGroups((groups) => [...groups]);

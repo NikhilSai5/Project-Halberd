@@ -4,6 +4,7 @@ import { useState, useRef, useEffect } from "react";
 import { useSettings, type TodoGroup, type TodoItem, type WallpaperFile } from '@/lib/SettingsContext';
 import { useAuth } from '@/lib/AuthContext';
 import { connectGoogle, getGoogleConnection, listGoogleTasks, removeGoogleConnection, updateGoogleTask, type GoogleTask } from '@/lib/googleIntegrations';
+import { loadNotificationSettings, saveNotificationSettings, type CalendarNotificationSettings } from '@/lib/calendarNotifications';
 import { userStorageKey } from '@/lib/userStorage';
 import defaultWallpaperOne from '@/assets/default wallpapers/wallhaven-d6q21o.jpg';
 import defaultWallpaperTwo from '@/assets/default wallpapers/wallhaven-l87z7l.jpg';
@@ -120,10 +121,26 @@ export default function Settings() {
   const [expandedGroupIds, setExpandedGroupIds] = useState<Set<string>>(new Set());
   const [showNewGroupDialog, setShowNewGroupDialog] = useState(false);
   const [newGroupName, setNewGroupName] = useState("");
-  const [connectionBusy, setConnectionBusy] = useState<"calendar" | "tasks" | null>(null);
+const [connectionBusy, setConnectionBusy] = useState<"calendar" | "tasks" | null>(null);
   const [connectionMessage, setConnectionMessage] = useState<string | null>(null);
   const [googleTasks, setGoogleTasks] = useState<GoogleTask[]>([]);
   const [connections, setConnections] = useState(() => getGoogleConnection(user?.id));
+  const [notificationSettings, setNotificationSettingsLocal] = useState<CalendarNotificationSettings>({
+    enabled: false,
+    minutesBefore: 10,
+  });
+
+  useEffect(() => {
+    void loadNotificationSettings().then(setNotificationSettingsLocal).catch(() => {});
+  }, [user?.id]);
+
+  const updateNotificationSettings = (updates: Partial<CalendarNotificationSettings>) => {
+    setNotificationSettingsLocal((prev) => {
+      const next = { ...prev, ...updates };
+      void saveNotificationSettings(next);
+      return next;
+    });
+  };
 
   useEffect(() => {
     setConnections(getGoogleConnection(user?.id));
@@ -1369,7 +1386,7 @@ export default function Settings() {
                           </div>
                         </div>
                         {connectionMessage && <p className="label-copy text-text-secondary" role="status">{connectionMessage}</p>}
-                        {connections.tasks && googleTasks.length > 0 && (
+{connections.tasks && googleTasks.length > 0 && (
                           <div className="rounded-xl border border-border-subtle p-4 space-y-2">
                             <div className="section-heading text-text-primary">Google Tasks</div>
                             {googleTasks.map((task) => (
@@ -1378,6 +1395,71 @@ export default function Settings() {
                                 <span className={task.status === "completed" ? "line-through text-text-muted" : ""}>{task.title}</span>
                               </label>
                             ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Calendar Notifications */}
+                    <div className="settings-section">
+                      <h4 className="section-heading text-text-primary">Calendar Notifications</h4>
+                      <div className="space-y-4">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <div className="font-body-main text-body-main text-on-surface">Event Reminders</div>
+                            <div className="label-copy text-text-secondary">Show upcoming Google Calendar events on the floating circle</div>
+                          </div>
+                          <button
+                            role="switch"
+                            aria-checked={notificationSettings.enabled}
+                            onClick={() => updateNotificationSettings({ enabled: !notificationSettings.enabled })}
+                            className={`settings-toggle relative w-11 h-6 rounded-full transition-colors ${
+                              notificationSettings.enabled ? "bg-primary" : "bg-surface-container-high"
+                            }`}
+                            aria-label="Toggle calendar notifications"
+                          >
+                            <span
+                              className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-surface-white shadow-md transition-transform ${
+                                notificationSettings.enabled ? "translate-x-full" : "translate-x-0"
+                              }`}
+                            />
+                          </button>
+                        </div>
+                        {!connections.calendar && (
+                          <div className="settings-info-banner bg-warning-container/20 border border-warning-container/30 rounded-lg p-4">
+                            <div className="flex items-start gap-3">
+                              <span className="material-symbols-outlined text-warning text-[20px] mt-0.5" aria-hidden="true">info</span>
+                              <div className="flex-1">
+                                <div className="font-body-main text-body-main text-on-surface">Google Calendar not connected</div>
+                                <div className="label-copy text-text-secondary mt-1">Connect Google Calendar above to receive event reminders.</div>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                        {notificationSettings.enabled && (
+                          <div className="space-y-4 ml-14 border-l-2 border-border-subtle pl-4">
+                            <div className="settings-field">
+                              <label className="font-label-secondary text-label-secondary text-text-secondary">
+                                Remind me
+                              </label>
+                              <div className="flex items-center gap-2">
+                                <input
+                                  type="number"
+                                  min={1}
+                                  max={240}
+                                  value={notificationSettings.minutesBefore}
+                                  onChange={(e) => {
+                                    const value = Number(e.target.value);
+                                    if (Number.isFinite(value) && value >= 1) {
+                                      updateNotificationSettings({ minutesBefore: Math.min(240, Math.round(value)) });
+                                    }
+                                  }}
+                                  className="form-control w-24 bg-transparent font-body-main text-body-main text-on-surface border border-border-subtle rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary"
+                                />
+                                <span className="font-body-main text-body-main text-on-surface">minutes before the event</span>
+                              </div>
+                              <div className="label-copy text-text-muted mt-1">The reminder appears on the floating circle in your new tab and other tabs.</div>
+                            </div>
                           </div>
                         )}
                       </div>

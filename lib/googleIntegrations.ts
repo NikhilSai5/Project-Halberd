@@ -47,6 +47,71 @@ export interface GoogleConnectionState {
   tasks: boolean;
 }
 
+/**
+ * A mirrored snapshot of the active user's Google session that lives in
+ * `browser.storage.local`. The newtab controls live in localStorage (where
+ * the auth/settings UI runs), but content scripts (floating circle on other
+ * tabs) do not have access to that origin's localStorage, so tokens and the
+ * connection state are mirrored here for them.
+ */
+export interface SharedGoogleSession {
+  userId: string | null;
+  accessToken: string | null;
+  refreshToken: string | null;
+  expiresAt: number | null;
+  connections: GoogleConnectionState;
+}
+
+const SHARED_GOOGLE_SESSION_KEY = "halberd.google.sharedSession";
+
+async function mirrorGoogleSessionToExtensionStorage(userId: string): Promise<void> {
+  try {
+    const tokens = getStoredTokens(userId);
+    const session: SharedGoogleSession = {
+      userId,
+      accessToken: tokens?.accessToken ?? null,
+      refreshToken: tokens?.refreshToken ?? null,
+      expiresAt: tokens?.expiresAt ?? null,
+      connections: getGoogleConnection(userId),
+    };
+    await browser.storage.local.set({ [SHARED_GOOGLE_SESSION_KEY]: session });
+  } catch {
+    // Mirroring is best-effort and must never break sign-in flows.
+  }
+}
+
+async function clearGoogleSessionFromExtensionStorage(): Promise<void> {
+  try {
+    await browser.storage.local.remove(SHARED_GOOGLE_SESSION_KEY);
+  } catch {
+    // Best-effort cleanup.
+  }
+}
+
+/**
+ * Re-writes the mirrored Google session for a user from localStorage. Used by
+ * the newtab UI so that already-connected accounts get mirrored even when the
+ * connection was established before mirroring existed.
+ */
+export async function refreshSharedGoogleSession(userId: string): Promise<void> {
+  await mirrorGoogleSessionToExtensionStorage(userId);
+}
+
+/**
+ * Reads the mirrored Google session for the current user. Returns null when
+ * there is no connected account or no access token available.
+ */
+export async function readSharedGoogleSession(): Promise<SharedGoogleSession | null> {
+  try {
+    const result = await browser.storage.local.get(SHARED_GOOGLE_SESSION_KEY);
+    const session = result?.[SHARED_GOOGLE_SESSION_KEY] as SharedGoogleSession | undefined;
+    if (!session || !session.accessToken || !session.userId) return null;
+    return session;
+  } catch {
+    return null;
+  }
+}
+
 function getStoredTokens(userId: string): GoogleTokens | null {
   try {
     const raw = localStorage.getItem(tokenKey(userId));
@@ -62,6 +127,7 @@ function saveTokens(userId: string, accessToken: string, refreshToken?: string):
     refreshToken,
     expiresAt: Date.now() + GOOGLE_AUTHORIZATION_LIFETIME_MS,
   } satisfies GoogleTokens));
+  void mirrorGoogleSessionToExtensionStorage(userId);
 }
 
 export function getGoogleConnection(userId?: string): GoogleConnectionState {
@@ -79,6 +145,7 @@ function setConnection(userId: string, service: keyof GoogleConnectionState): vo
     ...getGoogleConnection(userId),
     [service]: true,
   }));
+  void mirrorGoogleSessionToExtensionStorage(userId);
 }
 
 async function getExtensionGoogleToken(interactive = true): Promise<string | null> {
@@ -93,11 +160,15 @@ async function getExtensionGoogleToken(interactive = true): Promise<string | nul
 export async function removeGoogleConnection(userId: string, service: keyof GoogleConnectionState): Promise<void> {
   const next = { ...getGoogleConnection(userId), [service]: false };
   localStorage.setItem(`halberd.google.connections.${userId}`, JSON.stringify(next));
-  if (next.calendar || next.tasks) return;
+  if (next.calendar || next.tasks) {
+    void mirrorGoogleSessionToExtensionStorage(userId);
+    return;
+  }
 
   const tokens = getStoredTokens(userId);
   localStorage.removeItem(tokenKey(userId));
   localStorage.removeItem(providerTokenKey(userId));
+  void clearGoogleSessionFromExtensionStorage();
   if (tokens?.accessToken) {
     await fetch(`https://oauth2.googleapis.com/revoke?token=${encodeURIComponent(tokens.accessToken)}`, { method: "POST" }).catch(() => {});
   }
@@ -253,6 +324,59 @@ export const listGoogleEvents = (
     params.set("timeMax", range.timeMax);
   }
   return listAll<GoogleEvent>(userId, `/calendar/v3/calendars/primary/events?${params.toString()}`);
+};
+
+/*
+ * Token-based calendar listing for contexts that cannot reach localStorage
+ * (content scripts). Identical to listGoogleEvents but driven by the access
+ * token mirrored into browser.storage.local.
+ */
+async function googleRequest<T>(accessToken: string, path: string, init?: RequestInit): Promise<T> {
+  const response = await fetch(`https://www.googleapis.com${path}`, {
+    ...init,
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}`, ...init?.headers },
+  });
+
+  if (!response.ok) {
+    if (response.status === 401) throw new Error("Google authorization expired. Reconnect this integration in Settings.");
+    let detail = "";
+    try {
+      const body = await response.json() as { error?: { message?: string; errors?: { reason?: string }[] } };
+      detail = body.error?.message || body.error?.errors?.[0]?.reason || "";
+    } catch {
+      // Keep the status-only message when Google returns a non-JSON response.
+    }
+    throw new Error(`Google API error (${response.status})${detail ? `: ${detail}` : "."}`);
+  }
+  return response.status === 204 ? undefined as T : await response.json() as T;
+}
+
+async function listAllWithToken<T>(accessToken: string, path: string, maxResults = 2500): Promise<T[]> {
+  const values: T[] = [];
+  let pageToken = "";
+  do {
+    const separator = path.includes("?") ? "&" : "?";
+    const result = await googleRequest<{ items?: T[]; nextPageToken?: string }>(accessToken, `${path}${separator}maxResults=${maxResults}${pageToken ? `&pageToken=${encodeURIComponent(pageToken)}` : ""}`);
+    values.push(...(result.items || []));
+    pageToken = result.nextPageToken || "";
+  } while (pageToken);
+  return values;
+}
+
+export const listGoogleEventsWithToken = (
+  accessToken: string,
+  range?: { timeMin: string; timeMax: string },
+) => {
+  const params = new URLSearchParams({
+    singleEvents: "true",
+    orderBy: "startTime",
+    showDeleted: "false",
+  });
+  if (range) {
+    params.set("timeMin", range.timeMin);
+    params.set("timeMax", range.timeMax);
+  }
+  return listAllWithToken<GoogleEvent>(accessToken, `/calendar/v3/calendars/primary/events?${params.toString()}`);
 };
 export const createGoogleEvent = (userId: string, event: Omit<GoogleEvent, "id">) => googleFetch<GoogleEvent>(userId, "/calendar/v3/calendars/primary/events", { method: "POST", body: JSON.stringify(event) });
 export const updateGoogleEvent = (userId: string, id: string, event: Partial<GoogleEvent>) => googleFetch<GoogleEvent>(userId, `/calendar/v3/calendars/primary/events/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify(event) });

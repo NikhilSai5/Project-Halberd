@@ -20,6 +20,18 @@ import {
   loadFocusMode,
   onFocusModeChange,
 } from "@/lib/focusMode";
+import {
+  loadNotificationSettings,
+  readPendingNotification,
+  onPendingNotificationChange,
+  onNotificationSettingsChange,
+  findNextAlertableEvent,
+  broadcastPendingNotification,
+  clearPendingNotification,
+  DEFAULT_NOTIFICATION_SETTINGS,
+  type CalendarNotification,
+  type CalendarNotificationSettings,
+} from "@/lib/calendarNotifications";
 
 const STORAGE_KEY = "halberd_floating_circle_pos";
 const HABITS_STORAGE_KEY = "halberd_habits";
@@ -29,6 +41,9 @@ const MAX_EXPANDED_CIRCLE_WIDTH = 300;
 const EXPANDED_HORIZONTAL_PADDING = 12;
 const ICON_TEXT_GAP = 8;
 const POMODORO_COLLAPSED_WIDTH = 92;
+const NOTIFICATION_PILL_WIDTH = 224;
+const NOTIFICATION_DISPLAY_MS = 10000; // how long an event alert stays visible
+const NOTIFICATION_POLL_INTERVAL = 30000; // how often the circle checks upcoming events
 const SLIDESHOW_INTERVAL = 6000; // 6 seconds per habit emoji, synced across all tabs
 const CONFIRM_TIMEOUT_MS = 5000; // 5 seconds to confirm before resetting
 const MARGIN = 16;
@@ -85,6 +100,14 @@ function formatClock(totalSeconds: number): string {
   return `${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
 }
 
+function formatUntil(minutes: number): string {
+  if (minutes <= 0) return "now";
+  if (minutes < 60) return `in ${minutes}m`;
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return m === 0 ? `in ${h}h` : `in ${h}h ${m}m`;
+}
+
 export default function FloatingCircle() {
   const settingsContext = useContext(SettingsContext);
   const contextHabits = settingsContext?.habits;
@@ -103,9 +126,16 @@ export default function FloatingCircle() {
 
   const focusModeActive = focusMode.active;
 
+  // Calendar event notifications (shared across tabs via browser.storage.local)
+  const [notificationSettings, setNotificationSettings] = useState<CalendarNotificationSettings>(DEFAULT_NOTIFICATION_SETTINGS);
+  const [activeNotification, setActiveNotification] = useState<CalendarNotification | null>(null);
+
   // Priority: pomodoro takes precedence over focus mode
   const showPomodoro = pomodoroActive;
   const showFocusMode = !showPomodoro && focusModeActive;
+
+  // A calendar event alert takes over the circle while it is visible.
+  const showingNotification = notificationSettings.enabled && activeNotification !== null;
 
   // Position state with default to top-right
   const [position, setPosition] = useState<Position>(() => {
@@ -217,6 +247,72 @@ export default function FloatingCircle() {
     }, 500);
     return () => window.clearInterval(id);
   }, [focusModeActive]);
+
+  // Calendar event notifications: poll Google Calendar, broadcast to every tab's
+  // circle through browser.storage.local, and auto-dismiss after a few seconds.
+  useEffect(() => {
+    let cancelled = false;
+    let clearTimer: number | null = null;
+    let pollTimer: number | null = null;
+    let initialPollTimer: number | null = null;
+
+    const dismiss = () => {
+      if (clearTimer) {
+        window.clearTimeout(clearTimer);
+        clearTimer = null;
+      }
+      void clearPendingNotification();
+    };
+
+    const present = (notification: CalendarNotification | null) => {
+      if (cancelled) return;
+      if (clearTimer) {
+        window.clearTimeout(clearTimer);
+        clearTimer = null;
+      }
+      setActiveNotification(notification);
+      if (notification) {
+        clearTimer = window.setTimeout(dismiss, NOTIFICATION_DISPLAY_MS);
+      }
+    };
+
+    loadNotificationSettings().then((settings) => {
+      if (!cancelled) setNotificationSettings(settings);
+    });
+
+    readPendingNotification().then((notification) => {
+      if (!cancelled && notification) present(notification);
+    });
+
+    const unsubPending = onPendingNotificationChange((notification) => present(notification));
+    const unsubSettings = onNotificationSettingsChange((settings) => {
+      setNotificationSettings(settings);
+    });
+
+    const poll = async () => {
+      if (cancelled) return;
+      const settings = await loadNotificationSettings();
+      if (!settings.enabled) return;
+      const notification = await findNextAlertableEvent();
+      if (!cancelled && notification) {
+        await broadcastPendingNotification(notification, NOTIFICATION_DISPLAY_MS);
+      }
+    };
+
+    initialPollTimer = window.setTimeout(() => {
+      void poll();
+      pollTimer = window.setInterval(() => void poll(), NOTIFICATION_POLL_INTERVAL);
+    }, 3000);
+
+    return () => {
+      cancelled = true;
+      if (clearTimer) window.clearTimeout(clearTimer);
+      if (initialPollTimer) window.clearTimeout(initialPollTimer);
+      if (pollTimer) window.clearInterval(pollTimer);
+      unsubPending();
+      unsubSettings();
+    };
+  }, []);
 
   const focusTimeLeft = getFocusTimeLeft(focusMode, focusNow);
   const focusProgress = getFocusProgress(focusMode, focusNow);
@@ -452,6 +548,12 @@ export default function FloatingCircle() {
 
   // Handle click with confirmation requirement
   const handleHabitClick = () => {
+    // While an event alert is visible, clicking dismisses it.
+    if (showingNotification) {
+      setActiveNotification(null);
+      void clearPendingNotification();
+      return;
+    }
     if (timerActive) return;
     if (!currentHabit) return;
 
@@ -617,7 +719,9 @@ export default function FloatingCircle() {
     ? "🎉"
     : currentHabit?.emoji || "⚔️";
 
-  const nativeTitle = timerActive
+  const nativeTitle = showingNotification
+    ? `${activeNotification?.summary} · starts ${formatUntil(activeNotification?.minutesUntilStart ?? 0)}`
+    : timerActive
     ? `${timerTitle}${timerRunning ? "" : " (paused)"}`
     : isConfirming
     ? "is it really completed?"
@@ -655,6 +759,30 @@ export default function FloatingCircle() {
          : timerCollapsedLeft - (expandedCircleWidth - POMODORO_COLLAPSED_WIDTH)
        : timerCollapsedLeft;
 
+     // Pill layout when showing a calendar event alert: expands right when the
+     // circle sits on the left half of the screen, and left when on the right.
+     const notificationLeft = tooltipOnRight
+       ? 0
+       : `-${NOTIFICATION_PILL_WIDTH - CIRCLE_SIZE}px`;
+
+     const displayPillWidth = showingNotification
+       ? NOTIFICATION_PILL_WIDTH
+       : timerActive
+       ? isHovered
+         ? expandedCircleWidth
+         : POMODORO_COLLAPSED_WIDTH
+       : isHovered
+       ? expandedCircleWidth
+       : CIRCLE_SIZE;
+
+     const pillLeft = showingNotification
+       ? notificationLeft
+       : timerActive
+       ? timerPillLeft
+       : isHovered && !tooltipOnRight
+       ? `-${expandedCircleWidth - CIRCLE_SIZE}px`
+       : 0;
+
   return (
     <>
       {/* Inject keyframe animations — works in shadow DOM */}
@@ -662,6 +790,16 @@ export default function FloatingCircle() {
         @keyframes halberd-tooltip-pop {
           0% { transform: translateY(4px) scale(0.92); opacity: 0; }
           100% { transform: translateY(0) scale(1); opacity: 1; }
+        }
+        @keyframes halberd-notification-pop {
+          0% { transform: translateY(4px) scale(0.9); opacity: 0; }
+          100% { transform: translateY(0) scale(1); opacity: 1; }
+        }
+        @keyframes halberd-notification-bell {
+          0%, 100% { transform: rotate(0deg) scale(1); }
+          25% { transform: rotate(-14deg) scale(1.18); }
+          50% { transform: rotate(14deg) scale(1.18); }
+          75% { transform: rotate(-8deg) scale(1.08); }
         }
       `}</style>
 
@@ -723,11 +861,9 @@ export default function FloatingCircle() {
       <div
         style={{
           position: "absolute",
-          left: timerActive
-            ? timerPillLeft
-            : isHovered && !tooltipOnRight ? `-${expandedCircleWidth - CIRCLE_SIZE}px` : 0,
+          left: pillLeft,
           top: 0,
-          width: `${timerActive ? (isHovered ? expandedCircleWidth : POMODORO_COLLAPSED_WIDTH) : isHovered ? expandedCircleWidth : CIRCLE_SIZE}px`,
+          width: `${displayPillWidth}px`,
           height: `${CIRCLE_SIZE}px`,
           boxSizing: "border-box",
           borderRadius: `${CIRCLE_SIZE / 2}px`,
@@ -737,14 +873,20 @@ export default function FloatingCircle() {
           overflow: "hidden",
           justifyContent: timerActive ? "center" : "flex-start",
           gap: timerActive ? 0 : isHovered ? `${ICON_TEXT_GAP}px` : 0,
-          backgroundColor: timerActive
+          backgroundColor: showingNotification
+            ? "#fff6e0"
+            : timerActive
             ? "#eff8f1"
             : isConfirming ? "#e8f7ec" : justCompletedHabit ? "#fff4dc" : "#eff8f1",
-          border: timerActive
+          border: showingNotification
+            ? "2px solid #e0a33f"
+            : timerActive
             ? `2px solid ${timerBorderColor}`
             : isConfirming ? "2px solid #5cbe70" : justCompletedHabit ? "2px solid #d5aa5c" : "1px solid #8fb69a",
           boxShadow: isDragging
             ? "0 10px 18px rgba(54, 82, 61, 0.2), 0 0 0 2px #76a67f"
+            : showingNotification
+            ? "0 8px 16px rgba(183, 132, 50, 0.2), 0 0 0 1px #e0a33f"
             : isConfirming
             ? "0 8px 16px rgba(54, 139, 74, 0.18), 0 0 0 1px #5cbe70"
             : justCompletedHabit
@@ -754,7 +896,7 @@ export default function FloatingCircle() {
             : "0 5px 12px rgba(54, 82, 61, 0.14)",
           padding: !timerActive && isHovered ? "0 10px" : 0,
           transition: "left 0.22s ease, width 0.22s ease, padding 0.22s ease, background-color 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease",
-          pointerEvents: timerActive ? "auto" : isHovered ? "auto" : "none",
+          pointerEvents: timerActive || showingNotification ? "auto" : isHovered ? "auto" : "none",
         }}
         onMouseEnter={() => {
           if (timerActive) setIsHovered(true);
@@ -763,7 +905,61 @@ export default function FloatingCircle() {
           if (timerActive) setIsHovered(false);
         }}
       >
-        {timerActive ? (
+        {showingNotification ? (
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "8px",
+              width: "100%",
+              height: "100%",
+              padding: "0 10px",
+              animation: "halberd-notification-pop 0.32s cubic-bezier(0.34, 1.56, 0.64, 1)",
+            }}
+          >
+            <span
+              style={{
+                flex: "0 0 20px",
+                display: "inline-flex",
+                animation: "halberd-notification-bell 1s cubic-bezier(0.34, 1.56, 0.64, 1) 2",
+              }}
+            >
+              <AnimatedEmoji emoji="⏰" size={18} />
+            </span>
+            <span
+              style={{
+                flex: 1,
+                minWidth: 0,
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+                color: "#7a4f00",
+                fontFamily: "Inter, system-ui, sans-serif",
+                fontSize: "11px",
+                fontWeight: 700,
+                lineHeight: 1,
+              }}
+            >
+              {activeNotification?.summary}
+            </span>
+            <span
+              style={{
+                flexShrink: 0,
+                backgroundColor: "#f3dcae",
+                color: "#7a4f00",
+                borderRadius: "999px",
+                padding: "3px 8px",
+                fontFamily: "Inter, system-ui, sans-serif",
+                fontSize: "10px",
+                fontWeight: 700,
+                lineHeight: 1,
+                whiteSpace: "nowrap",
+              }}
+            >
+              {formatUntil(activeNotification?.minutesUntilStart ?? 0)}
+            </span>
+          </div>
+        ) : timerActive ? (
           <>
             <span
               ref={hoverLabelMeasureRef}
